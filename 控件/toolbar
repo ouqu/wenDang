@@ -1,0 +1,107 @@
+Toolbar:
+1 使用没有actionbar的主题
+   <application
+       android:theme="@style/Theme.AppCompat.Light.NoActionBar"
+       />
+2 xml布局
+   <android.support.v7.widget.Toolbar
+   android:id="@+id/my_toolbar"
+   android:layout_width="match_parent"
+   android:layout_height="?attr/actionBarSize"
+   android:background="?attr/colorPrimary"
+   android:elevation="4dp"                            //高度
+   android:theme="@style/ThemeOverlay.AppCompat.ActionBar"
+   app:popupTheme="@style/ThemeOverlay.AppCompat.Light"/>
+3 activity onCreate中设置
+    Toolbar myToolbar = (Toolbar) findViewById(R.id.my_toolbar);
+    setSupportActionBar(myToolbar);
+4  调用getSupportActionBar() 获取actionbar
+5 actionbar添加按钮
+  新建menu xml文件：
+      <menu xmlns:android="http://schemas.android.com/apk/res/android" >
+
+    <!-- "Mark Favorite", should appear as action button if possible -->
+    <item
+        android:id="@+id/action_favorite"
+        android:icon="@drawable/ic_favorite_black_48dp"
+        android:title="@string/action_favorite"
+        app:showAsAction="ifRoom"/>            //ifRoom表示有空间就显示，没空间藏在list中
+                                               //never表示一直藏在list中
+                                               // 加上 “| withText”可显示文字，文字为title的值
+
+    <!-- Settings, should always be in the overflow -->
+    <item android:id="@+id/action_settings"
+          android:title="@string/action_settings"
+          app:showAsAction="never"/>
+
+</menu> 
+
+6 响应按钮事件    重写activity中的onOptionsItemSelected(MenuItem item)
+    public boolean onOptionsItemSelected(MenuItem item) {
+    switch (item.getItemId()) {
+        case R.id.action_settings:
+            // User chose the "Settings" item, show the app settings UI...
+            return true;
+
+        case R.id.action_favorite:
+            // User chose the "Favorite" action, mark the current item
+            // as a favorite...
+            return true;
+
+        default:
+            // If we got here, the user's action was not recognized.
+            // Invoke the superclass to handle it.
+            return super.onOptionsItemSelected(item);  //super方法能处理：向上导航，actionView
+
+    }
+}
+
+7 向上导航
+  manifest中指定activity的parentActivityName参数：  android:parentActivityName="com.example.myfirstapp.MainActivity" >
+               如果版本在4.1一下： <meta-data
+                                        android:name="android.support.PARENT_ACTIVITY"
+                                        android:value="com.example.myfirstapp.MainActivity" />
+  设置actionbar:     ab.setDisplayHomeAsUpEnabled(true);
+
+8 actionView
+   在Menuxml中item中的showAsAction属性，|collapseActionView，点击后会占满ActionBar
+                      actionViewClass属性 "android.support.v7.widget.SearchView"
+   获取searchView:  在menu创建时获取
+                public boolean onCreateOptionsMenu(Menu menu) {
+                    getMenuInflater().inflate(R.menu.main_activity_actions, menu);
+
+                    MenuItem searchItem = menu.findItem(R.id.action_search);
+                    SearchView searchView =
+                           (SearchView) MenuItemCompat.getActionView(searchItem);
+
+                     // Configure the search info and add any event listeners...
+
+                      return super.onCreateOptionsMenu(menu);
+                 }
+
+   监听expands和Collapse: 在menu创建时设置监听：
+         OnActionExpandListener expandListener = new OnActionExpandListener() {
+        @Override
+        public boolean onMenuItemActionCollapse(MenuItem item) {
+            // Do something when action item collapses
+            return true;  // Return true to collapse action view
+        }
+
+        @Override
+        public boolean onMenuItemActionExpand(MenuItem item) {
+            // Do something when expanded
+            return true;  // Return true to expand action view
+        }
+    };
+
+       MenuItem actionMenuItem = menu.findItem(R.id.myActionItem);
+
+        // Assign the listener to that action item
+        MenuItemCompat.setOnActionExpandListener(actionMenuItem, expandListener);  //传入item和listener
+
+9 action provider
+    item中设置 app:actionProviderClass="android.support.v7.widget.ShareActionProvider"/>   //ShareActionProvider为例
+    在创建menu时获取 ：
+         ShareActionProvider myShareActionProvider =
+                                   (ShareActionProvider) MenuItemCompat.getActionProvider(shareItem);  //记得要保存起来，设置intent
+     myShareActionProvider.setShareIntent(myShareIntent);  //注意更新intent

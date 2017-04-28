@@ -1,0 +1,29 @@
+public final class ContentPresenter
+final意味着是不可继承的
+
+先来看构造方法:
+public ContentPresenter(Class<View> loadViewClass, Class<View> emptyViewClass, Class<View> errorViewClass) {
+    buildViewClassArray(loadViewClass, emptyViewClass, errorViewClass); }
+传入参数为 3个 继承view的Class, 从名称可以推断出用在什么地方.
+传入之后, 把这3个保存在map里, 这个map叫做mViewClassArray. 这个map的key是int, value是Class<View>
+
+这个presenter是用在StarterNetworkFragment里,
+public abstract class StarterNetworkFragment<T, P extends Presenter>
+    extends StarterFragment<P>
+    implements NetworkContract.ContentInterface<T>,
+    EmptyView.OnEmptyViewClickListener,
+    ErrorView.OnErrorViewClickListener 
+
+1: 在starterNetworkFragment构造的时候, 会从annotion中读取那3个class<view>, 然后构造一个contentPresenterFactory, 这个factory也很简单, 就是new一个contentPresenter.
+2: 在onCreate里面, 就会构造一个contentPresenter, 然后调用contentPresenter的onCreate(Context), contentPresenter会把context保存起来. 
+然后还会执行 contentPresenter.setOnEmptyViewClickListener(this);  contentPresenter.setOnErrorViewClickListener(this);
+这2个Listener就是两个方法, 值得注意的是, starterNetworkFragment并没有重写这2个方法, 所以它是abstract的. 这2个方法,后面再讲.
+
+3: 看完onCreate, 再看onResume. 这里会把fragment布局的rootview和contentView给contentPresenter保存起来,这个contentView由abstract方法提供, 也就是说要自己重写.
+
+4: starterNetworkFragment还implement了NetworkContract.View接口, 就是那个onError,onSuccess. 
+  onSuccess什么也没写. 
+  onError里, 调用getContentPresenter().buildEmptyTitle方法, 传入retrofitException的message. 这个方法就要用到构造时传入的emptyViewClass了, contentPresenter会通过反射(找参数为context的构造方法, public private都可以)来构造, 注意这个emptyViewClass要implement EmptyView这个接口, contentPresenter然后会调用这个emptyView的一些方法.
+
+5: starterNetworkFragment还implement了ProgressInterface接口, 有hideProgress(什么也没写), showProgress.
+   showProgress: contentPresenter会先检查是否已经展示了loadView, 如果没有, 也是通过反射构造loadViewClass, 然后清空rootView,把loadView加上去, 这个loadView是match_parent的.

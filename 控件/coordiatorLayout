@@ -1,0 +1,32 @@
+<coordinatorlayout>
+   <appbarlayout>
+     <CollapsingToolbarLayout
+        app:contentScrim="?attr/colorPrimary"
+        app:layout_scrollFlags="scroll|enteralways">
+            
+            <toolbar  app:layout_collapseMode="pin">
+                
+            </toolbar>
+
+     </CollapsingToolbarLayout>
+   </appbarlayout>
+
+   
+</coordinatorlayout>
+
+CollapseToolbarLayout:
+包含了toolbar
+包含在appbarLayout里
+
+contentScrim: 颜色值,表示完全收缩后toolbar的背景,(如果toolbar设置了背景,因为toolbar在最顶层,所以会一直显示toolbar,不建议toolbar设置背景)
+expandedTitleGravity:
+   left,right: 左(右)边的中间
+   bottom,top: 底部,会在左边; 顶部会在toolbar下面,也是在左边
+   centerVertical: 中间,会在左边
+   centerHorizen: 正中间
+   end: 右边中间
+   Start: 左边正中间
+   fillVertical:
+
+scrimAnimationDuration: 当collapselayout上拉到某个高度时,原来的背景会渐变为contentScrim,这个属性可以设置渐变的时间,以ms为单位
+

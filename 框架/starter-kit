@@ -1,0 +1,79 @@
+BaseActivity:
+   initBackToolbar(Toolbar toolbar): title设为空,设置回退标志,setSupportActionBar
+   通过intent启动activity,而且intent携带信息. 获取retrofit,调用create方法,参数为一个接口:
+       
+   
+
+StarterActivity:
+   setContentView(int layoutResID) //调用了ButterKnife.bind(this)
+   finish()   //隐藏软键盘
+StarterNetworkActivity<T> extends StarterActivity implements GenericCallback<T>:
+ 变量:
+   NetworkQueue<T> networkQueue
+ 方法: 
+   onCreate(Bundle savedInstanceState)   //new NetworkQueue
+   onDestroy()                           // networkQueue.cancel();     networkQueue = null;
+
+StarterRecyclerFragment:
+
+
+EasyViewHolder<V> extends RecyclerView.ViewHolder　
+　　　　　　　　　　　　　　　　　　implements View.OnLongClickListener, View.OnClickListener
+１我们知道　ViewHolder的构造方法是传入一个View,　而EasyViewHolder的构造方法传入了Context context, ViewGroup parent, int layoutId，　就是说简化了构造．
+２它自己定义了一个接口OnItemClickListener，里面有void onItemClick(final int position, View view)，position代表这个viewholder在整个recyclerView里面的位置，view代表这个viewholder．　这个easyViewHolder是应用了onClick接口的，当onClick方法触发时就会调用前面说的这个接口的方法．
+那么这个onClickListener绑定到哪里了呢？其实viewHolder在构造的时候会把传进来的view保存为public final对象，所以就是绑定到了这个view上．
+通过setItemClickListener(OnItemClickListener)　就可以设置了
+３它有一个抽象的方法bindTo(int position, V value)　position应该是这个viewHolder的位置，　value是泛型，代表通过网络请求获得的数据
+注意：这个类本身并没有绑定view，所以在构造的时候最后要加上ButterKnife.bind(this, itemView)
+
+接下来就要看一个使用了EasyViewHolder的StarterRecyclerFragment<v>: 这是一个带网络请求的recyclerView的fragment
+   必须要实现的方法:   bindViewHolders(EasyRecyclerAdapter adapter)
+                      在里面 adapter.bind(V.class, ViewHolder.class); 获取到数据时就会调用对应viewHolder的bindTo方法
+                      Call<List<V>> paginate(int page, int perPage)  要返回相应的call
+
+
+EasyRecyclerAdapter extends RecyclerView.Adapter<EasyViewHolder>:
+注意: layoutmanager要自己添加
+构造方法: 1 必须传入context,用来构造BaseEasyViewHolderFactory (或者直接传入BaseEasyViewHolderFactory也行)
+         2 Class valueClass,Class<? extends EasyViewHolder> easyViewHolderClass
+          这两个class定义需要用什么viewHolder和viewHolder对应的数据类型
+          如果不在构造的时候传入,那么可以调用bind(.....)方法,参数一样
+          在onCreateViewHolder的时候就会用factory来生成viewHolder
+如何添加数据: 这个类有内部变量List<Object> dataList = new ArrayList<>()
+             有以下几个添加数据的方法:
+                   add(Object object, int position)   //某位置插入,会调用notifyItemInserted(position)
+                   add(Object object)                 //在最后插入,会调用notifyItemInserted(position)
+                   addAll(List<?> objects)            //先clear dataList,再add,会调用notifyDataSetChanged()
+                   appendAll(List<?> objects)         //add,会调用notifyDataSetChanged()
+              删除数据: remove(Object data)
+                       remove(int position)  
+                       这两个方法都会调用notifyItemRemoved(position), 如果position在0到dataList.size之间,返回true,否则返回null
+我们再来看onBindViewHolder方法,里面就是调用了传入的viewHolder的bindTo方法,相当于把填充数据交给viewHolder来完成.
+总结:对于只有一种viewHolder的情况,只需要在构造时传入参数,再add数据,就可以显示出来了
+
+那么如果有多种viewHolder呢?
+我们先看看BaseEasyViewHolderFactory这个类,在adapter构造的时候就会实例化一个对象
+内部变量有一个map,这个map存放了valueClass和viewHolderClass的对应关系
+在adapter的onCreateViewHolder方法中,factory会根据数据的类型,返回对应的viewHolder.其中用到了反射
+总结:要显示多种viewHolder,只需要多次调用adapter的bind(Class valueClass, Class<? extends EasyViewHolder> viewHolder)方法
+
+
+StarterCommon:
+构造:传入activity并保存
+
+StarterFragment:
+void onCreate: new一个StarterCommon,传入自己为参数
+View onCreateView:  调用getFragmentLayout()获取id,然后inflate;  getFragmentLayout()必须要重写
+void onViewCreated: onCreateView调用后接着调用此,对view进行处理.  里面写了butterknife
+void onHiddenChanged:  
+
+CallbackFragment<E> extends StarterFragment:
+加入ContentPresenter 
+
+RecyclerViewFragment<E extends Entity>  extends CallbackFragment<ArrayList<E>>
+abstract void bindViewHolders
+void onCreate: new了recyclerView的adapter 调用bindViewHolders
+int getFragmentLayout():  返回设计好的layout
+void onViewCreated: 找控件,初始化recyclerView
+getRecyclerView()
+getAdapter()

@@ -1,0 +1,25 @@
+    Activity创建过程： onCreate()--->onStart()-->onResume()
+    注意：重写时要先调用父类的方法（super.---()）
+    暂停：例如，当半透明Activity打开时（比如对话框样式中的Activity），上一个Activity会暂停。 只要Activity仍然部分可见但目前又未处于焦点之中，它会一直暂停。暂停时，系统会对您的 Activity 调用 onPause() 方法，通过该方法，您可以停止不应在暂停时继续的进行之中的操作（比如视频）或保留任何应该永久保存的信息。如果用户从暂停状态返回到您的Activity，系统会重新开始该Activity并调用 onResume() 方法。
+    停止：停止状态保证 UI 不再可见，且用户的焦点在另外的Activity（或完全独立的应用）中。离开时调用onStop(),回来调用onRestart()。onStop()中执行更大、占用更多 CPU 的关闭操作，比如向数据库写入信息。
+onStart()方法：应执行不管是初次创建还是重新启动都要的操作，如确认gps是否开启。
+重新创建Activity:（旋转屏幕时，会销毁并重建。）当您的Activity开始停止时，系统会调用 onSaveInstanceState() 以便您的Activity可以保存带有键值对集合的状态信息。 
+              public void onSaveInstanceState(Bundle savedInstanceState) {
+              // Save the user's current game state
+              savedInstanceState.putInt(STATE_SCORE, mCurrentScore);
+              savedInstanceState.putInt(STATE_LEVEL, mCurrentLevel);
+    
+               // Always call the superclass so it can save the view hierarchy state
+               super.onSaveInstanceState(savedInstanceState);
+               }
+    恢复时，您可以选择实现在 onStart() 方法之后调用的 onRestoreInstanceState() ，
+                          public void onRestoreInstanceState(Bundle savedInstanceState) {
+                       // Always call the superclass so it can restore the view hierarchy
+                        super.onRestoreInstanceState(savedInstanceState);
+   
+                       // Restore state members from saved instance
+                        mCurrentScore = savedInstanceState.getInt(STATE_SCORE);
+                        mCurrentLevel = savedInstanceState.getInt(STATE_LEVEL);
+                         }
+     也可以在onCreate(Bundle savedInstanceState)中实现，要检查savedInstanceState是否为null
+

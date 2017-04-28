@@ -1,0 +1,13 @@
+layoutInflator=LayoutInflator.from(context)
+layoutInflator.inflate(R.layout.......,  viewgroup parent ,boolean attach)
+         parent不要为null
+         attach为false,表示不添加到viewGrouup中,返回R.layout......对应的view
+         attach为true,表示添加到viewGrouup中,返回parent
+
+
+首先, 如果遇到merge标签, 那么parent不能为null, attach必须为true
+然后调用此方法:void rInflate(XmlPullParser parser, View parent, Context context, AttributeSet attrs, boolean finishInflate)
+注意,这里finishInflate为false
+当遇到requestFocus标签时,就会调用parent.requestFocus()
+当遇到tag标签时, 会给parent设置tag, 
+

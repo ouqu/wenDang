@@ -1,0 +1,68 @@
+RecyclerView．adapter
+里面有viewType,用来实现一个recyclerView中有多种布局．
+重写 int getItemViewType(int position)，position表示位置，返回多少由你自己决定，记住从0开始.
+重写 int getViewTypeCount()    返回一共有多少种类型
+
+在onCreateViewHolder(ViewGroup parent, int viewType)中的viewType就是调用了getItemViewType得到的.
+
+Adapter:
+notifyItemInserted(int position)    position指list中新增加的item的位置, 会在该位置添加显示viewHolder, 其他viewHolder不会重画
+notifyItemRemoved(position)         position应该指这个viewHolder在layout中的位置, 在viewHolder中调用getLayoutPosition()
+                                     viewHolder的getAdapterPosition返回2种值: 1 RecyclerView.NO_POSITION 这个viewHolder已经提醒移除,但layout还没有刷新,可以忽略    2 返回position
+ 删除一个view时,应该先调用getAdapterPosition,如果是NO_POSITION可以忽略, 如果是position,则移除list中的数据; 之后notifyItemRemoved(getLayoutPosition()) 注:若通过viewHolder删除, 则viewHolder要持有adapter的引用
+
+
+ViewHolder:
+内部变量: RecyclerView mOwnerRecyclerView;
+
+getAdapterPosition()    会先判断mOwnerRecyclerView是否为null,如果Null则返回NO_POSITION; 不为null,则调用   
+                        mOwnerRecyclerView.getAdapterPositionFor(ViewHolder.this)
+
+Adapter:
+内部变量: AdapterDataObservable mObservable = new AdapterDataObservable();
+有一个public方法registerAdapterDataObserver(Observer),可以把传入的observer注册到mObservable中
+
+RecyclerView:
+内部变量: RecyclerViewDataObserver mObserver = new RecyclerViewDataObserver();
+private方法:  setAdapterInternal(Adapter adapter, ......)   这个方法会把自己的mObserver注册到传进来的adapter中,当然这个adapter也会被保存起来
+
+RecyclerViewDataObserver	:
+Public 方法: onItemRangeRemoved(int positionStart, int itemCount)  这个方法里面又会调用RecyclerView的mAdapterHelper.onItemRangeRemoved(positionStart, itemCount)
+
+AdapterHelper: 这个类不是RecyclerView的内部类,而是一个独立的类
+我们知道,UI刷新间隔是16ms, 所以这个类里面有一个缓冲List,叫做mPendingUpdates. 
+mPendingUpdates这个List的类型是一个叫UpdateOp的类,这个类的对象里保存了positionStart,itemCount以及操作类型(包括ADD,REMOVE,MOVE,UPDATE)
+那么这个onItemRangeRemoved方法会把需要移除的位置信息封装成UpdateOp对象,再放进缓冲List中,如果原来缓冲List中啥也没有,那么会返回true,说明要设置更新
+现在,我们回到RecyclerViewDataObserver中,调用mAdapterHelper.onItemRangeRemoved方法会返回boolean, 如果为true,则会再进行一些判断,最后可能会调用view的requestLayout()方法
+
+到此,notifyItemRemoved方法就走完了.总的来说,这个方法就是把需要移除的位置信息放入到缓冲队列中,UI更新时就会读取并清空缓冲队列. 
+可以看到,这个方法并没有对相应的viewHolder进行操作. 接下来我们进入getAdapterPosition()这个方法看看.
+
+getAdapterPosition():
+首先,ViewHolder有一个内部变量: RecyclerView mOwnerRecyclerView;
+这个方法先判断mOwnerRecyclerView是否为null,如果为null,说明这个viewHolder已经脱离了RecyclerView,那当然会返回NO_POSITION. 如果不为null,还要进一步判断, 进入recyclerView的getAdapterPositionFor(ViewHolder viewHolder)方法.
+
+getAdapterPositionFor(ViewHolder viewHolder):
+这个方法先判断传入的viewHolder里面的一些flag,以此来判断这个viewHolder是否有效.如果无效,则返回NO_POSITION.
+如果有效,还要再判断这个viewHolder是否在前面提到的缓冲队列中, 因此调用mAdapterHelper.applyPendingUpdatesToPosition(viewHolder.mPosition) 参数为这个viewHolder的内部变量mPosition,这个方法会对position进行处理.
+这个mPosition应该是在UI更新的时候才会被更新,所以这个值只代表viewHolder原来的位置.
+
+applyPendingUpdatesToPosition(int position):
+这个方法的源码如下:
+
+说说我的理解吧,缓冲队列的每一个变化都可能会影响到传进来的position,所以要遍历每一个变化,对position进行处理.
+以REMOVE为例, 在这个case里面,会判断,如果position在positionStart到positionStart + itemCount之间,就说明这个position要被删除,返回NO_POSITION; 如果在后面的,由于前面有item被删除,所以position应该前移,也就是减小itemCount; 如果在前面的,那就不需要变化.
+其他也类似
+
+到此,getAdapterPosition方法就走完了.可以看出,这个方法会结合viewHolder原来的position,viewHolder是否有效以及变化缓冲队列,得出正确的position. 这也就是官方文档里所说的得出精确的adapter position
+
+来到这里,我们探讨一下删除一个item的正确写法.这里的前提是,删除了item,其他item不需要重画
+我的写法:
+public void removeItem(int adapterPosition){
+    if (adapterPosition==RecyclerView.NO_POSITION)
+      return;
+    if (adapterPosition >= 0 && adapterPosition < mDatas.size()) {  //mDatas为数据集合        
+        mDatas.remove(adapterPosition);
+        notifyItemRemoved(adapterPosition);     
+    }
+  }

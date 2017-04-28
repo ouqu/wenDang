@@ -1,0 +1,55 @@
+private final HashMap<Integer, Func0<Subscription>> restartables = new HashMap<>();      //网络请求
+private final HashMap<Integer, Subscription> restartableSubscriptions = new HashMap<>();  //网络请求subscribe后的subscription
+private final ArrayList<Integer> requested = new ArrayList<>();   //已经开始的网络请求对应的id
+
+void restartable(int restartableId, Func0<Subscription> factory)
+put进restartables, 如果requested已经有这个,调用start(id)
+
+void stop(int restartableId)
+在requested除去restartableId, 从restartableSubscriptions中找到对应,如果找到,调用unsubscribe()
+
+start(int restartableId) 会订阅
+先调用stop, 再add进requested, 之后在restartables中找到对应的,调用call()返回subscription,再put进restartableSubscriptions
+
+其实start方法准确来说应该是个重启的过程, 调用start会先把之前已经启动的stop掉(如果之前已经启动),再次启动
+对于stop方法,调用时不需要判断是否已经启动
+
+/*----------------------------------------------
+首先看restartable方法, 参数有Id和一个返回Subscription的Func0接口. put进去restartables这个HashMap中, 然后检查requested这个ArrayList中有没有传进来的restartableId, 如果有, 就会取消这个请求并重新开始.
+再看start方法, 首先调用stop方法, 所以先看stop方法.
+stop:
+从requested中去除传入的restartableId, 然后在restartableSubscriptions找到对应的subscription, 并调用unsubscribe.
+回到start方法, 这里调用完stop方法后, 把restartableId放进requested中, 然后取出对应的Func0接口并调用, 得到的subscription放进restartableSubscriptions中.
+
+restartableFirst
+这个方法可以对observable进行处理, 从源码可以看出, 调用了observableFactory的call方法, 经过compose再subscribe.
+那么这个compose做了什么呢? 变换就在DeliverFirst这个类中, 
+先看构造方法, 传入了observable, 这个observable其实就是RxPresenter中的一个变量 BehaviorSubject<View> views = BehaviorSubject.create();
+BehaviourSubject简单来说就是, 当有Observer订阅的时候, 在这个订阅之前的一个事件也会发射出去. 具体自行搜索
+关键就在call方法, 首先进行materialize变换(这个就不解释了), 之后只取第一个notification, 然后要把notificatiion变成Observable, 这里有点绕.
+看里面的call方法, 那个BehaviourSubject原来是发射View泛型的, 现在通过map转变为发射Delivery, 如果原来发射的View泛型为null, 那这个Delivery就为null. (这里不太好解释, 仔细看看源码应该能明白)
+最后来个filter再取第一个, 完成了.
+小结: 这个变换的作用其实是, 如果View泛型已经脱离了Presenter, 那结果就不会传递到处理的方法中. 在之前介绍NucleusSupportFragment时已经提到, 当fragment进入onPause, presenter就会放弃对fragment的引用.
+
+现在回到restartableFirst方法, subscribe的参数是一个Action1接口, 这个Action1就是调用了delivery的split方法, 参数为restartableFirst的参数onNext和onError.
+这个delivery是含有一个notification的, 那split方法就是根据notification是onNext还是onError, 执行相应的方法.
+
+
+restartableReplay
+其实和restartableFirst很类似, 不同在于它用的是DeliverReplay
+DeliverReplay:
+首先也是materialize变换, 然后onComplete事件不会被传递, 订阅的是一个ReplaySubject.
+ReplaySubject就是, 当有Observer订阅的时候, 会发射所有的事件.
+这里其实就是把除了onComplete的所有事件存到ReplaySubject中.
+返回的是对view进行map变换, 和上面讲的类似.
+
+restartableLatestCache
+不同的地方在于它用了DeliverLatestCache
+首先调用Observable.combineLatest, 简单解释一下, 这个方法可以把两个Observable发射的事件, 通过自定的方法合并成一个新事件.
+第一个Observable就是view, 第二个是对传入的observable进行materialize变换,再过滤掉onComplete事件; 自定方法是, 如果发射的泛型View不为null,则返回Delivery; 为null, 就返回null
+最后也是过滤.
+
+这3个方法各有不同, restartableFirst方法只会取发射的第一个事件; restartableReplay会先把所有事件存起来,再一起发射; restartableLatestCache每发射一个事件, 都会对应到当时的view状态
+
+最后看一下 onTakeView和onDropView, 现在知道为什么可以获取到实时View的状态了吧.
+

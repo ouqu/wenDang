@@ -1,0 +1,51 @@
+ReflectionPresenterFactory<P extends Presenter> implements PresenterFactory<P>
+内部变量: private Class<P> presenterClass;
+这个变量在构造的时候被传入, 
+这个类有一个 P createPresenter()方法,就是通过反射,实例出presenterClass对象,并返回.
+那么如何构造?  这个类有个静态方法,主要是:传入一个class,获取这个class的"RequiresPresenter"注解,进而得到presenter的class,然后就可以构造PresenterFactory实例了. 这个传入的class一般就是StarterFragment之类的
+
+好,现在可以开始看框架里最底层的fragment了
+NucleusSupportFragment<P extends Presenter> extends Fragment implements
+内部变量:
+private PresenterLifecycleDelegate<P> presenterDelegate =
+        new PresenterLifecycleDelegate<>(ReflectionPresenterFactory.<P>fromViewClass(getClass()));
+这个类在构造之前就会构造ReflectionPresenterFactory,用的是静态方法.
+而且, fragment并不是直接管理这个PresenterFactory, 而是把它交给PresenterLifecycleDelegate管理.
+先看fragment的onCreate:
+如果bundle不为null,则通过bundle恢复presenter
+再看onResume:
+就是调用了presenterDelegate的onResume方法, 参数为fragment自己, 现在进入到presenterDelegate来看:
+在delegate的onResume方法里, 首先调用getPresenter方法, 这个方法就是如果presenter为null,则通过factory构造,并调用presenter的create方法. getPresenter完成后,把传入的参数(也就是view)交给presenter保存.
+有一个细节, 当presenter通过factory构造出来后, 有个叫PresenterStorage的类也会持有这个presenter的引用, 并在presenter那里注册一个监听, 当presenter要被销毁的时候, PresenterStorage就会知道并也不再持有引用.
+再看onPause:
+调用delegate的onDropView方法, 就是让presenter不再持有view的引用, view=null
+最后看onDestroy:
+也是调用delegate的onDestroy方法, 这个方法先看是不是activity要重启(例如横竖屏转换), 如果activity不是重启而是真的要destroy了, presenter就会调用上面提到的那个监听, 然后delegate放弃对presenter的引用(presenter = null).
+总的来看, NucleusSupportFragment连接了view和presenter, 当activity处于不可交互状态时, presenter不再持有view. 而且解决了activity的Configurations变化时,presenter反复构造的问题.
+
+
+ 
+接下来
+StarterFragment<P extends Presenter> extends NucleusSupportFragment<P>
+onCreate:
+final PresenterFactory<P> superFactory = super.getPresenterFactory();
+    setPresenterFactory(superFactory == null ? null : new PresenterFactory<P>() {
+      @Override public P createPresenter() {
+        return superFactory.createPresenter();
+      }
+    });
+这里有点特别, 第一步并不是执行super方法, 
+而是获取presenterFactory, 然后新建一个PresenterFactory, 然后createPresenter就是调用刚才获取的presenterFactory的createPresenter. 这里, 我也不知道为什么要这样写, 可能是想加入一些处理吧.
+注意, 这里就有个坑了. 
+setPresenterFactory就是调用delegate的setPresenterFactory方法, 这个方法里面, 首先检查如果presenter已经被构造出来, 就会抛出异常. 这里的含义就是说, presenter已经通过factory构造出来了,然后你又要改变presenterFactory, 这会引起混乱.
+这里告诉我们, 如果你继承了StarterFragment, 那么必须在starterFragment的onCreate调用完之后, 再getPresenter.  
+那fragment的onCreate什么时候调用呢? 
+根据我做的测试, 如果在activity的onCreate里new一个fragment并提交FragmentTransaction, 在activity的onStart里才会执行fragment的onCreate. 
+所以, 在activity的onCreate里, 千万不要new了一个fragment后马上调用getPresenter.
+
+
+在onCreateView里,把获取layout_id抽取出一个方法 getFragmentLayout(),没什么特别
+在onViewCreated里,调用ButterKnife.bind,所以不需要自己写啦
+还提供了hide/showSoftInputMethod方法,通过starterCommon来完成
+
+

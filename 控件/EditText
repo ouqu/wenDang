@@ -1,0 +1,39 @@
+TextWatcher:
+before :CharSequence s    改变之前的内容
+        int start         这个下标对应的位置就是改变的内容的开始位置, 
+        int after         新增的数量
+                               例如:如果增加了内容,在start对应的位置开始(包括start)增加了after个字符  count=0
+                               如果减少了内容,start到start+count-1就是减少的内容                after=0
+                               如果改变了内容,start到start+count-1就是被抹去的内容,而start到start+after-1就是新增的内容
+                               注意:新增的内容在s中并不存在
+        int count         旧内容中减少的数量
+
+after: Editable s         改变完成后的内容
+on:    CharSequence s,    改变完成后的内容
+       int start,         这个下标对应的位置就是改变的内容的开始位置, 
+       int before,  
+       int count          新增的数量
+                            例如:增加了内容,start到start+count-1就是新增加的内容     before=0
+                                 减少了内容,start到start+before-1就是减少的内容
+                                 改变了内容,start到start+count-1就是被抹去的内容,而start到start+after-1就是新增的内容
+                                 注意:减少的内容在S中并不存在
+
+总结:在before方法中,s的start到start+count-1就是减少的内容(count不为0)
+     在after方法中,start到start+count-1就是新增加的内容
+
+inputType:
+textCapCharacters    弹出键盘时会默认大写开启
+textCapWords         单词的第一个字母默认大写
+textCapSentences     句子第一个字母默认大写
+textAutoCorrect      输入法上方会提示拼写
+textUri              键盘会出现/
+textEmailAddress     键盘出现@等相关符号
+textPassword         输入一个字符会显示出来,输入下一个字符,前一个字符会变圈圈; 末尾有眼睛按钮,按下变明文
+numberPassword       密码只能0-9
+number               只能输入0-9
+numbersigned         只能输入0-9和'-', 且'-'只能在开头
+numberDecimal        只能输入0-9和'.', 不能输入'-'
+
+
+singleLine        只会显示一行,超出范围的右进
+maxLines          显示的最大行数,超出范围下进   (singleLine优先于maxLines)

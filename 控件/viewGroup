@@ -1,0 +1,40 @@
+private static final class TouchTarget 
+        private static final int MAX_RECYCLED = 32; //单链表size最大值
+        private static final Object sRecycleLock = new Object[0];  //锁
+        private static TouchTarget sRecycleBin;  //单链表第一个结点
+        private static int sRecycledCount;    //单链表size
+
+        public View child;  // The touched child view.
+        public int pointerIdBits;   // The combined bit mask of pointer ids for all pointers captured by the target.
+        public TouchTarget next;    // The next target in the target list.
+
+        public static TouchTarget obtain(@NonNull View child, int pointerIdBits)
+              首先需要从链表获取一个TouchTarget, 如果sRecycleBin == null, 直接new一个; 不为Null, 拿出第一个结点,  sRecycledCount减一.
+              拿到之后, 把传入参数赋值给对应的变量, 返回这个对象
+
+       public void recycle()
+              如果单链表size小于MAX_RECYCLED, 插入到头部; 否则让next=null. finally child=null
+
+public boolean dispatchTouchEvent(MotionEvent ev)
+boolean handled = false;  最后返回的直
+如果是ActionDown:
+    cancelAndClearTouchTargets(ev); //把mFirstTouchTarget对应的链表清空
+    resetTouchState();
+
+final boolean intercepted;
+
+如果是actionDown或者子view已经拦截, 首先检查mGroupFlags对应的FLAG_DISALLOW_INTERCEPT位是不是1, 是1那就intercepted=false; 
+不是1, 调用onInterceptTouchEvent(ev)方法, 一般返回false, 返回值给intercepted
+（总结：onInterceptTouchEvent在actionDown和子view已经拦截时，会调用 ）
+如果不拦截并且motionEvent不是cancel, 
+
+
+
+
+比如你需要写一个类似slidingmenu的左侧隐藏menu，主Activity上有个Button、ListView或者任何可以响应点击的View，你在当前View上死命的滑动，菜单栏也出不来；因为MOVE事件被子View处理了~
+这样做: 在viewgroup的dispatchTouchEvent中先记录down, move的坐标移动, 如果是打开菜单栏的动作, 那就设置标志位为true; 后面都是调用super方法.
+onInterceptTouchEvent里面, 检查标志位, 如果是打开菜单栏动作, 返回true. 这样事件就会交给viewgroup处理, 对于之前在接受事件的子view看来, 事件发着发着就得到了一个action_cancel
+在viewgroup的onTouchEvent中, 根据当前手指位置, 调整菜单栏位置. 遇到up事件时, 判断菜单栏是否卡在中间, 采取相应动作. 最后clear状态.
+注意, onTouchEvent被执行的条件是: 没有touchListener或者 touchListener返回false.
+
+

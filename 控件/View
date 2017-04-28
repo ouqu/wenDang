@@ -1,0 +1,7 @@
+dispatchTouchEvent
+如果有touchListener并且onTouch返回true， 返回true
+否则返回onTouchEvent方法的值
+
+onTouchEvent
+如果不是clickable或者longClickAble, 返回false
+是的话return true

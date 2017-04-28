@@ -1,0 +1,9 @@
+ImageView
+scaleType:center   显示在中心, 若小于会放大
+          centerCrop   放大填满整个view,宽高都要填满,超过裁剪
+          centerInside 图片小于view,不操作; 大于view,缩小到完整显示
+          matrix       左上角绘图,超过裁剪
+          fitCenter    缩小或放大到view的高度,居中显示
+          fitEnd       缩小或放大到view的高度,下面显示
+          fitStart     缩小或放大到view的高度,上面显示
+          fitXY        拉伸图片到填满

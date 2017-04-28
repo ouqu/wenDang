@@ -1,0 +1,7 @@
+onStartCommand
+单例PlayerHandler(playerService)
+NotificationHandler(playerService)
+注册boardcastReceiver
+
+接收boardcast:
+

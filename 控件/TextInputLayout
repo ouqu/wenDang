@@ -1,0 +1,17 @@
+继承于LinearLayout
+专门设计用来包裹一个EditText(或者EditText的子类)
+TextInputEditText便是一个子类,这个类使得editText在全屏模式下可以显示出hint,除此之外与editText相同
+textInputLayout.getEditText()  可获得包裹的editText
+横线颜色采用styles.xml中 AppTheme的colorAccent
+hint的属性:<style name="EditHintTextAppearance" parent="TextAppearance.Design.Hint">
+    <item name="android:textColor">#aeaeae</item>
+    <item name="android:textSize">11sp</item>
+  </style>
+
+editText设置paddingTop可设置正文与提示之间的距离, 要注意正文和提示本身也会占据一小块边框
+
+xml属性:
+counterEnabled="true"   显示计数器
+counterMaxLength="6"    计数最大值,超过时横线变红色,提示会变红色
+errorEnabled='true'     错误信息显示, 注意显示错误信息会使layout高度变大, 所以要用的话要设置
+                        在代码里调用setError(String),(这时会自动errorEnable=true)横线变红色,提示不变色,左下角出现String; 传入null或者""时,回到正常

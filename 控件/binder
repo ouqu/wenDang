@@ -1,0 +1,5 @@
+public interface IInterface   给客户端调用的接口
+IBinder asBinder ()  //记录如何获得IBinder的方法
+
+Binder extends IBinder(接口)
+

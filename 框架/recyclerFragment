@@ -1,0 +1,75 @@
+public abstract class StarterRecyclerFragment<E extends Entity, PC extends PaginatorPresenter>
+    extends StarterNetworkFragment<PaginatorContract<E>, PC>
+    implements com.paginate.Paginate.Callbacks,
+    SwipeRefreshLayout.OnRefreshListener
+
+onCreate: 构造了一个EasyRecyclerAdapter
+          在onCreate里配置一下, 通过StarterFragConfig, 构造要用Builder. 弄好之后, 调用buildFragConfig方法, 这个方法里面会配置recyclerView的viewHolderFactory和bind, 然后把StarterFragConfig保存起来. 注意: StarterFragConfig一定要构造一个, 即使是空, 不然后面的adapter会缺少layoutManager. 后面为了方便, StarterFragConfig简称fragConfig
+
+这个fragment的布局很简单, 最外层FrameLayout, 然后是swipeRefreshLayout, 最后是recyclerView
+
+onViewCreated: 
+1: 找到swipeRefreshLayout和RecyclerView
+2: 初始化RecyclerView, 就是通过fragConfig设置layoutManager等等
+3: 初始化Paginate, 如果fragConfig为空或fragConfig的canAddLoadingListItem()为false(默认为true),直接返回, 这一步结束. (canAddLoadingListItem就是指需要加载更多的时候,要不要显示一个进度)
+   没有直接返回的话, 用Builder构造RecyclerPaginate, 这个RecyclerPaginate主要是设置recyclerView的下拉加载更多. 其内部变量:
+  private final RecyclerView recyclerView;   //要处理的recyclerView
+    private final Callbacks callbacks;       //这个接口包含3个方法, onLoadMore ,isLoading, hasLoadedAllItems, 这3个方法的实现都写在StarterRecyclerFragment
+    private final int loadingTriggerThreshold;  //设置当底部还剩多少个没有显示出来的时候, 开始加载更多. 可以实现预加载
+    private WrapperAdapter wrapperAdapter;      //后面介绍
+    private WrapperSpanSizeLookup wrapperSpanSizeLookup;  //后面介绍
+
+    RecyclerPaginate构造过程:
+    1: recyclerView.addOnScrollListener(mOnScrollListener)
+       每一次滑动都会判断是否到达底部, 若到达底部, 再看是否正在刷新或者已经加载全部item, 就是调用callback的isLoading, hasLoadedAllItems. 都通过的话, 就会调用onLoadMore. 注意: recyclerView的layoutManager只能是linear或staggerGrid
+    2: 如果canAddLoadingListItem为false, 跳过. 这一步配置加载更多的进度图的viewHolder.
+       WrapperAdapter继承RecyclerView.Adapter, 构造时候要传入原recyclerView的adapter和LoadingListItemCreator, 这个LoadingListItemCreator是个接口, 只有2个方法:
+    RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType);
+    void onBindViewHolder(RecyclerView.ViewHolder holder, int position);
+    还提供了一个默认实现.
+    这个wrapperAdapter实际上可以实现2种viewType, 当要显示正常viewType的时候, 调用原adapter; 要显示进度圈, 就调用LoadingListItemCreator.
+   3: 最后检查一下,现在的位置是否需要加载更多. 现在RecyclerPaginate构造结束.
+
+4:初始化swipeRefreshLayout.
+   通过fragConfig设置ColorSchemeColors, 然后设置OnRefreshListener. onRefresh()的操作比较简单, 还没refresh就开网络请求； 已经开了,就显示圈圈
+5: 如果fragConfig有初始数据, 就add到adapter里面.
+onViewCreated结束了
+
+接下来到网络部分:
+在buildFragConfig方法里, 会new 一个PaginatorEmitter, 先看看PaginatorEmitter
+
+public class PaginatorEmitter<E extends Entity> implements Emitter<E>, PaginatorContract<E>
+先看构造方法, 传入参数 (StarterFragConfig fragConfig, Action1<PaginatorEmitter<E>> onRequest) :
+1: 把fragConfig保存起来, 内部变量currentPage等于fragConfig.getStartPage(),这个默认值是1
+2: onRequest保存起来, 内部变量hasMoreData和isLoading设为true
+3: 通过fragConfig判断是通过分页还是key获取数据, 这里涉及到2个内部变量:String firstPaginatorKey, nextPaginatorKey. 如果是分页, 这2个变量为currentPage; 如果是key, 那就为null
+构造完成
+等等,有个疑惑, 刚才内部变量isLoading设为true, 但我们并没有看到发起网络请求啊. 看看onResume方法就明白了, 
+onResume: 
+PaginatorEmitter有个内部变量ArrayList<E> requestedItems, 这个变量放的是:从第一个id/第一页开始, 网络请求获取到的所有数据.
+在onResume里, 会调用paginatorEmitter.requested()来判断, 其实就是判断requestedItems是否为空, 如果为空,那就开始网络请求. 那么一开始的时候这个requestedItems肯定是空的, 所以在onResume里就会发起第一个网络请求了.
+
+再来看onSuccess:
+1 首先也是判断requestedItems是否为空, 如果为空, 说明是第一次获取, 就会把recyclerViewAdapter清空. (这个功能对应于下拉刷新, 因为下拉刷新肯定要把原来的数据清除). 然后把获取到的数据append进去.
+2 然后调用mPaginatorEmitter.received(paginatorContract), (这个paginatorContract是对获取的数据的包装). 
+  进去received方法: 先把isLoading设为false, 把paginatorContract保存起来, 然后判断paginatorContract是否为空, 如果为空, 说明已经获得全部数据了, hasMoreData设为false. 如果不为空, 再看如果hasMoreData本身是true, 还是true; 否则就要看获取到的数据等不等于perpage(分页大小), 来判断还有没有更多数据. 最后, 涉及到2个内部变量:firstPaginatorKey和nextPaginatorKey, firstPaginatorKey设为requestItems的第一个的id, nextPaginatorKey设为最后一个的id.这2个变量就是用在PaginatorPresenter的request方法的那2个参数.
+总的来看, 这个received方法干了2件事:判断是否获取了全部数据和保存下一页从哪里开始的信息
+
+3 mPaginate.setHasMoreDataToLoad(false) 这个方法的参数如果为true, 那就显示那个上拉加载更多的圈圈; 为false就隐藏.
+4 最后判断现在的recyclerView是不是空的, 如果是空的, 就用contentPresenter显示emptyView. 
+onSuccess完成.
+
+再看onError:
+1 调用mPaginatorEmitter.received(null), 这个表示已经获取全部数据
+2 剩下的和onSuccess很类似, 这里就不说了.
+
+
+接下来就要来看上拉加载更多的实现: 前面我们提到, 当recyclerView滑动到需要加载的位置时, 会调用isLoading和hasLoadedAllItems这2个方法来看要不要发起网络请求, 这2个方法在StarterRecyclerFragment实现的.
+先看isLoading方法: 判断mPaginatorEmitter的isLoading 和 swipeRefreshLayout的isRefreshing, 只要其中一个满足, 就会返回true.
+                  这个设计是为了解决 多次滑到底部导致发起多次重复的网络请求 这个问题.
+再看hasLoadedAllItems方法: 判断mPaginatorEmitter的hasMoreData.
+这2个方法都通过, 就到onLoadMore方法了, 经过一堆的双保险判断, 就会显示显示那个上拉加载更多的圈圈, 并发起网络请求.
+上拉加载更多到此结束.
+
+最后是下拉刷新:  onRefresh方法
+
