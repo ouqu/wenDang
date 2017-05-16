@@ -1,0 +1,32 @@
+OperatorMerge
+把接收T的subscriber变成接收Observable的subscriber
+转变成的是MergeSubscriber
+
+MergeSubscriber
+构造：parentSubscriber=actual
+mergeProducer = new MergeProducer(this)
+delayErrors = false
+actual.add(this)
+actual.setProducer(mergeProducer);
+  setProducer:
+    subscriber的private long requested = Long.MIN_VALUE;
+    调用mergeProducer的request(Long.MAX_VALUE)
+    mergeProducer.request(Long.MAX_VALUE):
+        private volatile long requested = 0;
+        requested = MAX_VALUE
+   (actual有producer, mergeSubscriber没有producer)
+构造结束
+onStart:
+mergeProducer.request(16)
+   mergeSubscriber.requested = 16;
+
+onNext:
+如果不是发射一个，调用handleNewSource（observable）
+handleNewSource:
+  
+
+
+
+
+
+

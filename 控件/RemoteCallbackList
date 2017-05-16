@@ -1,0 +1,102 @@
+public class RemoteCallbackList<E extends IInterface> {
+    ArrayMap<IBinder, Callback> mCallbacks = new ArrayMap<IBinder, Callback>();
+    private Object[] mActiveBroadcast;
+    private int mBroadcastCount = -1;
+    private boolean mKilled = false;
+
+private final class Callback implements IBinder.DeathRecipient {
+        final E mCallback;
+        final Object mCookie;
+        
+        Callback(E callback, Object cookie) {
+            mCallback = callback;
+            mCookie = cookie;
+        }
+
+        public void binderDied() {
+            synchronized (mCallbacks) {
+                mCallbacks.remove(mCallback.asBinder());
+            }
+            onCallbackDied(mCallback, mCookie);
+        }
+    }
+Callback这个类其实就是保存了传入的接口和一个Object, 
+它还继承了IBinder.DeathRecipient接口，当binder死亡时，会从arraymap里面移除。下面还有一个onCallbackDied方法，其实里面什么也没做，当然这个方法可以被重写。
+
+接下来看register方法：
+public boolean register(E callback, Object cookie) {
+        synchronized (mCallbacks) {
+            if (mKilled) {
+                return false;
+            }
+            IBinder binder = callback.asBinder();
+            try {
+                Callback cb = new Callback(callback, cookie);
+                binder.linkToDeath(cb, 0);
+                mCallbacks.put(binder, cb);
+                return true;
+            } catch (RemoteException e) {
+                return false;
+            }
+        }
+    }
+整个方法是加锁的。 如果已经Kill了，返回false
+先尝试设置死亡监听，如果这个时候binder已经死了，直接返回。然后以binder作为Key， callback作为value，插入到arraymap里面。
+返回值表示注册是否成功
+
+public boolean unregister(E callback) {
+        synchronized (mCallbacks) {
+            Callback cb = mCallbacks.remove(callback.asBinder());
+            if (cb != null) {
+                cb.mCallback.asBinder().unlinkToDeath(cb, 0);
+                return true;
+            }
+            return false;
+        }
+    }
+同样整个方法是加锁的。就是从arraymap里面移除，并取消监听。
+
+public int beginBroadcast() {
+        synchronized (mCallbacks) {
+            if (mBroadcastCount > 0) {
+                throw new IllegalStateException(
+                        "beginBroadcast() called while already in a broadcast");
+            }
+            
+            final int N = mBroadcastCount = mCallbacks.size();
+            if (N <= 0) {
+                return 0;
+            }
+            Object[] active = mActiveBroadcast;
+            if (active == null || active.length < N) {
+                mActiveBroadcast = active = new Object[N];
+            }
+            for (int i=0; i<N; i++) {
+                active[i] = mCallbacks.valueAt(i);
+            }
+            return N;
+        }
+    }
+同样整个方法是加锁。 其实就是把arraymap里所有的callback取出来，放到一个数组里面，这样后面读取的时候快
+
+getBroadcastItem(int index)这个很简单，就不贴源码了
+
+public void finishBroadcast() {
+        if (mBroadcastCount < 0) {
+            throw new IllegalStateException(
+                    "finishBroadcast() called outside of a broadcast");
+        }
+        
+        Object[] active = mActiveBroadcast;
+        if (active != null) {
+            final int N = mBroadcastCount;
+            for (int i=0; i<N; i++) {
+                active[i] = null;
+            }
+        }
+        
+        mBroadcastCount = -1;
+    }
+这里就是把缓存的callback清除掉。
+
+

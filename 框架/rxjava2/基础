@@ -1,0 +1,53 @@
+Emitter接口
+onNext
+onError
+onComplete
+
+ObservableEmitter
+setDisposable
+setCancellable
+isDisposed
+
+ObservableOnSubscribe
+subscribe(ObservableEmitter<T> e)
+
+Observable.create返回一个Observable, 这个Observable是所有Observable的基类，也是一个抽象类
+create方法接收一个ObservableOnSubscribe接口，实际返回的是ObservableCreate，
+把接口保存起来
+
+subscribe(Observer)
+Observer是一个接口，有onSubscribe(相当于onStart), onNext, onComplete, onError
+拿到这个接口之后，进行一些检查，就会调用subscribeActual(observer), 传入的还是那个接口
+这个subscribeActual是一个抽象方法，由子类实现
+这个时候的子类是ObservableCreate：
+先构造一个CreateEmitter, 这个类会对原始的observer包装一下
+onNext: 检查发射的值是否为null, observer是否已取消观察， 然后才交给observer
+注意，异常需要自己处理
+onComplete:检查observer是否已取消观察， 交给observer， 最后调用dispose
+onError: 检查异常是否为null, observer是否已取消观察， 然后才交给observer， 最后dispose
+注意，要保证onComplete和onError只能调用一次
+
+再来看看取消观察
+CreateEmitter<T>  extends AtomicReference<Disposable>
+上面提到的包装类CreateEmitter继承了AtomicReference, 也就是说这个类有一个变量，这个变量用来标志是否已经取消。
+public static boolean dispose(AtomicReference<Disposable> field) {
+        Disposable current = field.get();
+        Disposable d = DISPOSED;
+        if (current != d) {
+            current = field.getAndSet(d);
+            if (current != d) {
+                if (current != null) {
+                    current.dispose();
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+简单来说，就是把这个标志设置为DISPOSED，DISPOSED就是一个单例。
+如果设置的时候已经取消，返回false，否则返回true
+public static boolean isDisposed(Disposable d) {
+        return d == DISPOSED;
+    }
+看这个标志是否等于DISPOSE
+

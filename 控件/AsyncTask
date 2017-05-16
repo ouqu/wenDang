@@ -1,0 +1,30 @@
+cpu_count    core_pool_size
+   1               2
+   2               2
+   3               2
+   4               3
+   5               4
+   6               4
+理想情况是cpu数量减一， 但要满足至少2个之多4个
+max_pool_size: 2 * cpu_count + 1
+
+ThreadFactory： 内部变量AtomicInteger=1, 直接new一个线程
+静态内部变量：
+Executor sDefaultExecutor = SERIAL_EXECUTOR;
+//execute方法： 传入runnable，插到arrayDeque; 如果当前没有进行中的任务，从deque中取出任务，用线程池执行
+
+BlockingQueue sPoolWorkQueue = new LinkedBlockingQueue<Runnable>(128);
+在类加载的时候会new ThreadPoolExecutor
+
+构造方法：
+1：构造一个WorkerRunnable(就是应用了callable接口，泛型Result)，call方法被调用时，首先把一个叫mTaskInvoked的boolean设为true, 然后执行我们熟悉的doInBackground方法，如果执行过程出现异常，一个叫onCancelled的boolean设为true，result就是null。(可见出现异常时会自动变成cancelled)
+最后把result连同asyncTask发给静态的内部handler。handler收到后，把result还给asyncTask, asyncTask
+就是根据isCancelled判断应该调用onCancelled方法还是onPostExecute方法; 最后把status变为finish
+isCancelled有两个重载方法，有参和无参。有参方法里面就是调用了无参方法。参数取决于doInBackground有没有被打断以及返回值，因此最好还是要判空。
+
+
+
+execute方法：调用executeOnExecutor方法，参数为sDefaultExecutor和param
+首先判断status状态，只要不是PENDING都会抛异常，说明execute不能重复调用
+把status改为RUNNING, 调用onPreExecute方法
+把param交给mWorker, 然后调用sDefaultExecutor的execute方法（就是放进arrayDeque里）

@@ -1,0 +1,16 @@
+private long requested = Long.MIN_VALUE; // default to not set
+
+public void setProducer(Producer producer)
+将producer保存起来
+首先考虑没有父subscriber的情况：
+如果requested是初始直，那就producer.request(MAX_VALLUE)，表示有多少要多少
+否则，producer.request(requested)  表示只接收requested个
+再考虑有父subscriber：
+如果本subscriber并没有设置requested(requested是初始直), 那就交给父subscriber处理（父subscriber.setProducer）
+
+总结：setProducer不仅仅是set, 还会根据requested来要求producer发射指定数量的东西。如果有父subscriber的话，还是本subscriber优先。
+这个优先的意思就是说，仅当本subscriber没有设置requested的时候，才会交给父subscriber处理
+
+requested(n):
+如果还没有设置producer，那就更新requested的值
+已经设置了producer，直接producer.request(n)

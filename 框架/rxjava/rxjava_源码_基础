@@ -1,0 +1,108 @@
+observable创建：
+public static <T> Observable<T> create(OnSubscribe<T> f) {
+        return new Observable<T>(RxJavaHooks.onCreate(f));
+}
+这个hook可以看成是一个监听，就是当一个Observable创建出来的时候，就会通知你.
+RxJavaHooks.onCreate源码：
+public static <T> Observable.OnSubscribe<T> onCreate(Observable.OnSubscribe<T> onSubscribe) {
+        Func1<OnSubscribe, OnSubscribe> f = onObservableCreate;
+        if (f != null) {
+            return f.call(onSubscribe);
+        }
+        return onSubscribe;
+    }
+这个onObservableCreate是一个Func1对象，开发者可以设置。如果有的话，就会返回转换后的onSubscribe，否则直接返回原来的。
+现在要看Observable的构造方法：
+protected Observable(OnSubscribe<T> f) {
+        this.onSubscribe = f;
+    }
+很简单，就是把onSubscribe保存起来。
+总结一下，observable的创建干了2件事，通知hook和把onSubscribe保存起来。
+
+再来看subscribe方法：
+public final Subscription subscribe(Subscriber<? super T> subscriber) {
+        return Observable.subscribe(subscriber, this);
+    }
+这里调用了静态方法，再进去看看
+static <T> Subscription subscribe(Subscriber<? super T> subscriber, Observable<T> observable) {
+......//判断是否为null
+subscriber.onStart();  //调用subscriber的onStart方法
+       if (!(subscriber instanceof SafeSubscriber)) {
+            // assign to `observer` so we return the protected version
+            subscriber = new SafeSubscriber<T>(subscriber);
+        }  //这个SafeSubscriber就是对subscriber进行了包装，这个后面再说
+ try {
+            // allow the hook to intercept and/or decorate
+            RxJavaHooks.onObservableStart(observable, observable.onSubscribe)
+                       .call(subscriber);
+            return RxJavaHooks.onObservableReturn(subscriber);
+        } //同样是hook,这里终于调用了onSubscribe的call方法，传入的subscriber是一个SafeSubscriber。第二个hook，一般也是返回subscriber。
+        catch(Thrwoable e) {......}
+//如果在执行onSubscribe.call方法时抛出异常，这个异常就会交给onError处理，如果很不幸onError也抛出了异常，那这个异常就会直接抛出
+总结来说，干了3件事，subscriber.onStart()，转换为safeSubscriber，调用onSubscribe方法
+
+现在来看SafeSubscriber：
+public class SafeSubscriber<T> extends Subscriber<T> {
+    private final Subscriber<? super T> actual;
+    boolean done;
+
+    public SafeSubscriber(Subscriber<? super T> actual) {
+        super(actual);
+        this.actual = actual;
+    }
+actual就是原始的subscriber, done就是onComplete有没有被调用过的标志，这样就可以控制onComplete只调用一次。
+先看onNext:
+public void onNext(T args) {
+        try {
+            if (!done) {
+                actual.onNext(args);
+            }
+        } catch (Throwable e) {
+            // we handle here instead of another method so we don't add stacks to the frame
+            // which can prevent it from being able to handle StackOverflow
+            Exceptions.throwOrReport(e, this);
+        }
+    }
+首先查看done标志，然后执行OnNext。如果有异常，就会判断这个异常应不应该交给onError,源码里定义了几个不会交给onError的异常，可自行查看。
+再看onError:
+public void onError(Throwable e) {
+        Exceptions.throwIfFatal(e);
+        if (!done) {
+            done = true;
+            _onError(e);
+        }
+    }
+_onError这个方法，总结来说就是调用actual.onError，不管抛不抛出异常，都会unsubscribe; 如果有异常，那就要抛出
+最后到onCompleted方法，也是调用actual.onCompleted。最后都要unsubscribe，抛出异常的话，直接抛出，不会再给onError。
+
+			
+前面多次看到了unsubscribe，现在来看看：
+public final void unsubscribe() {
+        subscriptions.unsubscribe();
+    }
+private final SubscriptionList subscriptions;
+这个subscriptions是一个SubscriptionList，而SubscriptionList其实就是包装了一个List<Subscription>，里面还有一个boolean unsubscribed.
+来看SubscriptionList.unsubscribe:
+public void unsubscribe() {
+        if (!unsubscribed) {
+            List<Subscription> list;
+            synchronized (this) {
+                if (unsubscribed) {
+                    return;
+                }
+                unsubscribed = true;
+                list = subscriptions;
+                subscriptions = null;
+            }
+            // we will only get here once
+            unsubscribeFromAll(list);
+        }
+    }
+如果已经unsubscribe，直接返回。这里用了双重加锁检查
+subscriptions就是那个List，最后会把这个List里所有的subscription都unsubscribe.
+这里提供的其实就是关联的功能，当一个unsubscribe时，与之关联的都会unsubscribe。
+既然有List，肯定提供了add方法，Subscriber也确实提供了add方法，具体自行查看。
+可以看到，unsubscribe只是把一个标志位置位而已，这和thread的停止是一样的道理。
+
+
+
