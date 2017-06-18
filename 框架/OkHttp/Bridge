@@ -1,0 +1,19 @@
+对于有body的request
+尝试添加content-type到header
+如果有content-length, 添加到header，同时去除transfer-encoding header
+如果没有，那就添加transfer-encoding的header，去除content-length
+content-length和transfer-encoding,简单来说，content-length表示这个Body有多长，但有些时候，我们无法准确知道到底有多长，所以就要用transfer-encoding这个属性，最常用的值就是chunked，表示分块传输。最后一个分块长度为0,表示结束。
+所以这2者只能有一个存在
+
+如果request没有host,从url中提取host
+如果request没有connection, 添加keep-alive. 
+因为HTTP建立在TCP链接上，使用持久连接能提高性能，keep-alive表示使用持久连接，现在HTTP/1.1规定所有连接都是持久的，所以这个字段没有也可以。
+
+如果request的accept-encoding和range都是Null，那就添加gzip到header
+gzip表示服务器应发送压缩的文件，然后客户端进行解压
+这里okHttp会帮你解压
+然后range属性，比如你从服务器接受一个东西，接了一半网断了，那当网恢复的时候，range属性就告诉服务器，把剩下的传给我就行了，节省流量。
+可以看出有range的时候，不会自动添加gzip
+
+尝试添加cookie和user-agent
+开始proceed

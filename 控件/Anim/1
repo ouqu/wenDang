@@ -1,0 +1,15 @@
+ofInt
+new ValueAnimator 空构造
+valueAnimator.setValues(int[] values)
+进入setValues:
+如果int[]为空，直接return
+如果内部变量mValues为空，new IntPropertyValuesHolder
+  IntPropertyValuesHolder继承PropertyValuesHolder，首先是父类构造方法，参数为String，这里是“”（空字符串），保存在内部变量mPropertyName
+   再看子类构造，首先调用父类的setIntValues方法，这个方法设置mValueType=int.class, 
+
+先介绍一下Keyframe, 一个抽象类，内部变量有mFraction，mInterpolator等;
+其中一个子类IntKeyframe，多了一个内部变量mValue, 构造方法是传入float fraction和int value并保存。可以推测，这个类用来保存端点的进度和对应的值。
+
+先介绍一下Keyframes，这是一个接口，里面有setEvaluator和getValue等方法，推测用于根据进度计算出相应属性值。
+KeyframeSet继承了这个接口，顾名思义，就是存放有keyframe的集合，先看一个工厂方法ofInt(int[])，
+里面构造一个keyframe数组，按照均等分来的，举个例子，传入的int[]长度为5,这5个数字有4个间隔，每个间隔占0.25, 那么会有5个keyframe，其值分别为0 a1, 0.25 a2, 0.5 a3, 0.75 a4, 1.0 a5

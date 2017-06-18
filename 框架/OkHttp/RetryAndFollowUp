@@ -1,0 +1,19 @@
+Request followRequest(Response)
+检查responseCode:
+如果是HTTP PROXY AUTH 407，让okHttpClient的proxyAuthenticator处理并返回request
+如果是HTTP_UNAUTHORIZED 401, 让okHttpClient的authenticator处理并返回request
+这个Authenticator是一个接口，只有一个方法Request authenticate(Route route, Response response)
+在OKHttpClient的Builder直接传入，可以从client获得。
+
+HTTP_CLIENT_TIMEOUT 408，可以直接返回request再来一次，要检查body是不是不可重复的
+
+307 308资源重定向 300重定向多选择 301资源已转移 303服务器将用户指向不同资源
+client可以设置followRedirects禁止重定向
+首先把Location这个header转换成url
+现在涉及一个问题，重定向不需要携带body（除了propfind方法，这个方法需要）
+所以，去除request中body和相关的header，返回request
+结束
+
+回到主程序，如果follow次数超过最大次数，抛异常
+如果新的url的host和port和scheme有一个不同，还需要新建连接池
+回到开头，在来一次proceed

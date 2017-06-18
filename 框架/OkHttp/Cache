@@ -1,0 +1,31 @@
+public final class Cache implements Closeable, Flushable
+里面有InternalCache内部类，也就是CacheInterceptor要用的，其实也是调用Cache的方法
+
+Response get(Request request)
+首先把request的url转变为key，再通过DiskLruCache找到对应的snapShot,如果没有，直接返回null
+然后，从snapShot获取缓存文件的inputstream，从中读取http响应的信息，转换成一个Entry对象。
+构造Response，参数可以直接从entry获得，至于body就是snapShot的流
+最后检查一下和request是否对应，返回response
+
+CacheRequest put(Response response)
+首先检查method，如果是post,patch,put,delete,move, 除去此缓存，返回null
+就是说这些请求不会缓存
+再检查，只缓存get请求
+最后获取editor，写入缓存
+
+
+
+CacheInterceptor
+如果okHttpClient没有cache，直接proceed完了
+接下来，CacheStrategy有内部类Factory，构造传入现在的毫秒数，request和cacheResponse
+构造就是把这3个保存起来，如果cacheResponse不为null,那再把里面的header的数据转换再保存
+然后调用getCandidate方法，返回CacheStrategy，CacheStrategy就2个变量，request和cacheResponse,可以为null.
+前面我们也获得了cacheResponse，但不能直接使用，需要根据缓存策略来决定是否使用。
+如果请求是https，而且cacheResponse的握手没有，不返回缓存
+如果request和response其中一个设置了noStore, 不返回缓存
+如果request设置了nocache,或者request有if-modified-since或If-None-Match
+
+
+
+
+
