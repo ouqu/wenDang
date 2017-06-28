@@ -1,0 +1,50 @@
+构造方法
+private ObjectAnimator(Object target, String propertyName) {
+        setTarget(target);
+        setPropertyName(propertyName);
+    }
+target会用weakReference保存，propertyName直接保存
+
+成员变量：mAutoCancel
+这个意思是，当这个动画调用start()时，如果有一个相同target，相同propertyName的动画正在进行，那就取消上一个动画
+
+现在看start()
+void autoCancelBasedOn(ObjectAnimator objectAnimator) {
+        for (int i = mAnimationCallbacks.size() - 1; i >= 0; i--) {
+            AnimationFrameCallback cb = mAnimationCallbacks.get(i);
+            if (cb == null) {
+                continue;
+            }
+            if (objectAnimator.shouldAutoCancel(cb)) {
+                ((Animator) mAnimationCallbacks.get(i)).cancel();
+            }
+        }
+    }
+就是比较每一个callback，如果target和propertyName都相同，那就cancel掉这个callback
+我发现一个问题，如果有一个target和propertyName都相同的动画处于pause状态，那么在AnimationHandler是找不到它的，那这个动画resume的时候就会有2个动画同时进行，不知道算不算bug～
+
+还重写了initAnimation方法，这个方法在动画真正开始时被调用，并且只会调用一次
+里面调用了PropertyValuesHolder的setupSetterAndGetter(Object target)方法
+
+mProperty一般为null, 刚开始mSetter也是没有的，所以会调用setupSetter方法，又跑到setupSetterOrGetter方法，
+这个propertyMapMap，key是Class, value是map，而里面的这个map，key是propertyName，value是method
+就是说，每一种class对应一个map，这个map存放了propertyName和method的对应关系
+具体获得这个method就是用反射
+
+然后再看另一个重写的方法animateValue(float fraction)
+首先判断如果target已经没有了，那就cancel
+然后调用父类的方法，具体的属性值已经得到了，最后再invoke set方法
+
+
+
+
+
+
+
+
+
+
+
+
+
+

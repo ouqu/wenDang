@@ -1,0 +1,51 @@
+PropertyValuesHolder
+ String mPropertyName;
+ Keyframes mKeyframes
+ TypeEvaluator mEvaluator;
+ private Object mAnimatedValue;
+
+ setIntValues(int[])
+   mValueType = int.class;
+   mKeyframes = KeyframeSet.ofInt(values);
+
+ calculateValue(float fraction)
+   mKeyframes.getValue(fraction) 再通过Converter转换类型
+   子类例如IntPropertyValuesHolder，有mIntKeyframes直接获得int结果
+
+ getAnimatedValue() 返回mAnimatedValue，子类都有重写，返回自己的类型
+这个类主要负责缓存结果，估值计算由KeyframeSet负责。设置evaluator时，evaluator会传给keyframeSet
+
+
+KeyframeSet
+  Keyframe mFirstKeyframe;
+  Keyframe mLastKeyframe;
+  List<Keyframe> mKeyframes;
+  TypeEvaluator mEvaluator
+里面保存了多个keyframe以及evaluator，估值（evaluate）由这个类完成，fraction从外面传进来
+那么Keyframe是什么呢？
+简单来说，keyframe记录了一个端点的值，和对应的进度
+举个例子，我们看KeyframeSet的一个静态工厂方法，ofInt(int[])
+里面构造一个keyframe数组，按照均等分来的。这个int数组就是ValueAnimator.ofInt(....)那个参数。
+例如，传入的int[]长度为5, 为{a1, a2, a3, a4, a5}  这5个数字有4个间隔，每个间隔占0.25, 那么会构造5个keyframe。
+Keyframe.ofInt(float fraction, int value)就是构造一个IntKeyframe，传入的2个参数会被保存起来，通过getFraction和getValue方法可以获取。
+其值分别为0 a1, 0.25 a2, 0.5 a3, 0.75 a4, 1.0 a5
+
+Keyframe搞懂了，下面我们就来看一下KeyframeSet是如何根据fraction计算出具体的属性值
+核心部分就在KeyframeSet的getValue(float fraction)方法中：
+分了4种情况，第一种情况是只有2个keyframe,直接调用evaluator就行。
+注意：这里有一个mInterpolator，并不是我们给valueAnimator设置的那个Interpolator！这个东西其实是从keyframe那里获得的，当使用Android自带的工厂方法构造keyframe时，interpolator为null。
+所以这个mInterpolator一般为null, 下面看到的interpolator都是这样的。
+第二种情况，fraction<=0: 那就认为这个fraction落在第一个和第二个keyframe之间，计算
+第三种情况，fraction>=1: 那就认为落在最后2个keyframe之间，计算
+第四种情况，fraction在0到1之间： 那就找出落在哪2个keyframe之间，再计算
+其实还是挺简单的
+
+
+
+
+
+
+
+
+
+

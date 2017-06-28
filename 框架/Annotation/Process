@@ -1,0 +1,65 @@
+AbstractProcessor
+getSupportedSourceVersion()
+  SourceVersion.latestSupported();
+
+  private Types typeUtils;
+  private Elements elementUtils;
+  private Filer filer;
+  private Messager messager;
+@Override
+  public synchronized void init(ProcessingEnvironment processingEnv) {
+    super.init(processingEnv);
+    typeUtils = processingEnv.getTypeUtils();
+    elementUtils = processingEnv.getElementUtils();
+    filer = processingEnv.getFiler();
+    messager = processingEnv.getMessager();
+  }
+
+Element类型：
+PackageElement  包名 java文件的开头
+VariableElement 成员变量
+ExecuteableElement  方法
+TypeElement   类名  接口名  形参
+
+重写方法
+public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+
+    // 遍历所有被注解了@Factory的元素
+    for (Element annotatedElement : roundEnv.getElementsAnnotatedWith(Factory.class)) {
+          ...
+    }
+  }
+ ...
+}
+
+Factory注解
+@Target(ElementType.TYPE) @Retention(RetentionPolicy.CLASS)
+public @interface Factory {
+
+  /**
+   * 工厂的名字
+   */
+  Class type();
+
+  /**
+   * 用来表示生成哪个对象的唯一id
+   */
+  String id();
+}
+
+element有getKind方法，返回ElementKind.CLASS等
+
+messenger.printMessage可以打印出错误信息
+有错误应该直接return true
+
+class.getAnnotion
+class.getCanonicalName  获取容易理解的名字
+class.getSimpleName   就是类名
+class.getName         包括包名的类名
+注：如果注解里面有类名，annotion获取类名的时候，如果是源代码，会抛出MirroredTypeException
+(DeclaredType) mte.getTypeMirror()，再调用asElement方法，强转为TypeElement，然后就可以调用getQualifiedName().toString()或getSimpleName().toString();
+
+
+注：第一轮process生成的file, 又会作为第二轮process的输入，也就是说，process可能会运行多次，每次输入不一样，需要注意
+
+

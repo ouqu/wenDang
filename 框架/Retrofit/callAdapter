@@ -1,0 +1,31 @@
+ExecutorCallAdapterFactory extends CallAdapter.Factory
+CallAdapter.Factory是一个抽象类，作用是根据返回类型（Call，Observable...）和注解，返回一个转换者（callAdapter），这个转换者会对传进来的call进行包装。
+以返回类型为call为例，对应的factory是ExecutorCallAdapterFactory，这个factory会返回一个转换者，这个转换者会将call包装进ExecutorCallbackCall
+
+创建callAdapter时，retrofit会遍历callAdapterFactory数组，看哪一个factory能够返回callAdapter。具体实现是，如果当前的factory不能处理，就会返回null，retrofit就会问下一个factory。
+
+Converter也是相同的思路
+第一个ConverterFactory是内置的，BuiltInConverters，它能处理返回类型是ResponseBody和Void
+对于ResponseBody, 如果方法注解有Streaming，那转换者就会原样返回responseBody; 如果没有，那转换者会把inputStream转到buffer里面，关闭inputstream，返回带buffer的responseBody。（注意内存溢出）
+GsonConverterFactory对所有返回类型都能处理，通过gson转换
+
+
+serviceMethod构造完成后，就会调用callAdapter.adapt(OkHttpCall), 这个okHttpCall保存了serviceMethod和实际参数args
+最后生成ExecutorCallbackCall，构造函数参数有2个Executor callbackExecutor, Call<T> delegate
+callbackExecutor就是用handler回到主线程，delegate就是okHttpCall
+
+现在我们看看ExecutorCallbackCall的execute方法
+里面有boolean executed，如果重复执行会抛异常
+然后创建真正的call，就是使用serviceMethod里面保存的信息，以及调用parameterHandler处理具体参数，得到request，再使用okHttpClient生成call
+调用okHttp3的call得到原始的response，如果code在200-299,认为成功，再利用前面提到的converter进行转换，最后得到带有对象的Response<T>
+
+enqueue也是差不多，只不过多了，使用callbackExecutor转到主线程上
+
+
+
+
+
+
+
+
+

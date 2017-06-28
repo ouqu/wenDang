@@ -1,0 +1,5 @@
+pause()
+把 mPuase=true  mResume = false，只会赋值一次。
+这里并没有向AnimationHandler去除callback，因为还要记录暂停的时间，真正的removeCallback会在AnimationHandler通知的时候
+resume()
+只有在mPuase==true  mResume == false时才有效，这里就会马上向AnimationHandler注册

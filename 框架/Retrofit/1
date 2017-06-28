@@ -1,0 +1,32 @@
+public <T> T create(final Class<T> service)
+先检查是不是接口，并且不能继承其他接口
+使用Proxy.newProxyInstance    当方法被调用的时候，InvocationHandler的invoke方法会被调用
+
+进入invoke方法
+如果调用的方法是object的方法，交给object处理
+否则开始loadServiceMethod
+这里用到了缓存技术，serviceMethodCache是一个concurrentHashMap，key是method，value是serviceMethod
+serviceMethod里固定了http请求的具体格式，如需要什么参数，以什么方式，但具体参数还需要从外面传进来
+现在来看serviceMethod怎样构造出来
+使用builder，传入retrofit和method，保存起来，还保存了方法的注解，参数类型，及参数的注解，然后直接build
+build:
+首先从retrofit中拿到callAdapter和converter
+然后处理方法的annotation, 
+    1 首先处理httpmethod（必须要有），例如get,post......，会转跳到这个方法void parseHttpMethodAndPath(String httpMethod, String value, boolean hasBody)
+    httpMethod和value和hasBody直接保存，value就是httpmethod里面的参数，就是去掉baseUrl的网络地址，还会将value分割，用一个Set<String>来装。
+    注意，value里如果有？（http的query参数），那？后面不能再有 \.....
+    2 如果有header,保存起来
+    3 最后检查Multipart和FormUrlEncoded注解，只能有一个
+检查，没有body的请求（get,head,delete）不能有Multipart和FormUrlEncoded注解
+现在要处理方法的参数了，用到ParameterHandler这个类，是抽象类，抽象方法：void apply(RequestBuilder builder, @Nullable T value)
+   后面真正构造builder的时候就会调用这个方法，value是真正的参数，就是怎样把参数加到request里面，不同的子类有自己的实现。
+servicemethod有成员变量parameterHandlers，就是parameterHandler数组，通过遍历参数的注解和类型，就能生成一组对应的parameterHandler。
+最后检查一下注解有没有冲突，整个builder就构造好了，serviceMethod也构造好了
+
+serviceMethod构造好了，放进serviceMethodCache，下次就能直接用了
+
+
+
+
+
+

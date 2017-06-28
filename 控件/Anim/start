@@ -1,0 +1,52 @@
+start()调用start(false)
+start(boolean playBackwards)
+检查当前线程必须有Looper
+        mStarted = true;
+        mPaused = false;
+        mRunning = false;
+        mAnimationEndRequested = false;
+        // Resets mLastFrameTime when start() is called, so that if the animation was running,
+        // calling start() would put the animation in the
+        // started-but-not-yet-reached-the-first-frame phase.
+        mLastFrameTime = 0;
+构造线程单例AnimationHandler
+这个类负责管理这个线程里的所有动画，内部时钟源是Choreographer
+animationHandler.addAnimationFrameCallback(this, (long) (mStartDelay * sDurationScale));
+这里valueAnimator把自己注册进去，点进去看看
+AnimationHandler里面有list保存callback, 除此之外，还会检查如果是第一个注册进来的callback，就会向Choreographer注册，注意这里注册进去的是AnimationHandler，意思就是每到一个帧时间就通知AnimationHandler。
+现在看看帧时间到来时做些什么
+先检查如果有callback，意味着有动画，那就继续向Choreographer注册，这样就能一直收到通知
+然后doAnimationFrame(long frameTime)
+这个方法遍历注册进来的动画, 首先要检查开始时间到了没有
+怎么检查？AnimationHandler里面有一个map, Key是动画，value是开始的时间，就是从开机到动画开始的时间
+现在简单了，如果动画没有startDelay，可以开始; 有startDelay，跟现在时间比较一下就可以了。
+
+动画要开始了，接着调用callback.doAnimationFrame(frameTime), 回到valueAnimator
+把frameTime保存在mStartTime, mStartTimeCommitted = false
+ mLastFrameTime = frameTime 然后进入boolean animateBasedOnTime(long currentTime)
+这个方法主要是计算出原始的fraction(当前时间减去开始时间再除以总长度)，判断是否结束，如果有重复动画，还要把小数部分提取出来，因为传入interpolator的fraction应在0到1
+然后就是通过interpolator转换，结果交给PropertyValuesHolder，由PropertyValuesHolder进行估值以及一些处理工作。
+最后通知UpdateListener
+
+回到start方法，最后一部分，如果没有startDelay或mSeekFraction>=0:
+initAnimation();
+mAnimationEndRequested = false;
+mRunning = true;
+if (mSeekFraction >= 0) {
+            mOverallFraction = mSeekFraction;
+        } else {
+            mOverallFraction = 0f;
+        }
+最后通知listener, 动画开始了
+再看initAnimation, 只会执行一次。这个方法是要解决这样一个问题：如果使用ValueAnimator.ofObject(TypeEvaluator evaluator, Object... values)，evaluator传null，而object是Integer或Float。
+这样也是可以的，因为initAnimation这个方法会判断 当发生上面那种情形，就会给mEvaluator设置IntEvaluator或FloatEvaluator
+
+
+
+
+
+
+
+
+
+
