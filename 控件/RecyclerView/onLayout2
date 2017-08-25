@@ -1,0 +1,12 @@
+FLAG_BOUND        1
+FLAG_UPDATE      10
+FLAG_INVALID    100
+FLAG_REMOVED   1000
+FLAG_RETURNED_FROM_SCRAP 10 0000
+FLAG_TMP_DETACHED    1 0000 0000
+
+正常viewholder有bound和tmpdetach的flag， 添加到attachedScrap
+remove的viewholder 有bound,tmpdetach,removed的flag，添加到attachedScrap
+对于remove的holder，如果在prelayout，照样从attachScrap取，并且加returnfromScrap的flag
+
+update的holder，有update flag，在prelayout阶段scrapView时，会询问itemAnimator,对于defaultItemAnimator，payload不为空就会返回true (canReuseUpdatedViewHolder)，所以也是放attachScrap

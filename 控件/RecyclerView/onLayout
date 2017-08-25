@@ -1,0 +1,74 @@
+mState.mIsMeasuring = false;
+
+进入dispatchLayoutStep1()
+mLayoutOrScrollCounter ++;
+进入processAdapterUpdatesAndSetAnimationFlags方法
+   第一个判断不执行
+   第二个判断成立，进去里面看看
+   进入了AdapterHelper的preProcess方法，（当adapter的notifyItemXXX调用时，信息最后保存在这个类的mPendingUpdates）
+   第一句mOpReorderer.reorderOps(mPendingUpdates)，这句会把moveOp移动到mPendingUpdates最后面，并且修正引起的偏差。
+   然后就是遍历所有update，对于add，op加入到mPostponedList中，最后调用到了RecyclerView的offsetPositionRecordsForInsert(int positionStart, int itemCount)方法; 每个viewHolder有一个mPosition变量，这个方法会找出所有mPosition大于positionStart的viewHolder，这些viewHolder的mPosition应该加上itemCount才正确，这个方法还会把layoutParams的mInsetsDirty置false，表示decoration受到影响。这个方法还会通知Recycler做相应调整。 最后RecyclerView的mItemsAddedOrRemoved置true
+    对于其他update，也是加入mPostponedList，调整对应的viewHolder和Recycler，设置RecyclerView的标志位
+
+    总结：
+    add（positionStart, itemCount）： mItemsAddedOrRemoved = true  mState.mStructureChanged = true
+                                     子view的mPosition>=positionStart的，要加上itemCount。第一次操作的话保存旧位置到mOldPosition,mPreLayoutPosition
+                                     Recycler的mCachedViews同样操作
+    remove(positionStart, itemCount):mItemsAddedOrRemoved = true;   mState.mStructureChanged = true;
+                                     子view在删除队列后面的，要减去itemCount。第一次操作保留旧位置
+                                     子view在删除队列里面的， 加remove的flag，mPosition变为positionStart-1，第一次操作的话保留旧位置
+                                     Recycler的mCachedViews，删除队列后面的要减去itemCount;删除队列里面的，加remove flag，扔到RecycledViewPool
+     update(int positionStart, int itemCount, Object payload):
+             mItemsChanged = true
+             子view在更新队列里的，加update flag。payload如为null，加fullupdate flag; 不为null,还要没有fullupdate flag时，才加进payload list
+             Recycler的mCachedViews，在更新队列里的，加上update flag，扔到RecycledVIewPool
+      move(from,to) :
+        mState.mStructureChanged = true;  mItemsAddedOrRemoved = true
+        子view在from的，改变position。在后面的，position-1
+        Recycler的mCachedViews同样操作
+
+
+    AdapterHelper的preProcess走完了，总结一下，遍历所有op, op加入mPostponedList，并且调整viewHolder和Recycler，设置RecyclerView的标志位
+
+    回到processAdapterUpdatesAndSetAnimationFlags方法，最后有一堆标志位的判断，根据log，初始化的2次调用基本都是false，而当有item remove，mState.mRunSimpleAnimations，mState.mRunPredictiveAnimations，animationTypeSupported都是true
+    现在来看processAdapterUpdatesAndSetAnimationFlags这个名字还是挺贴切的。
+
+回到dispatchLayoutStep1()方法，下面也是一堆标志位，根据log，初始化的2次调用基本是false，
+mState.mTrackOldChangeHolders必须要rumSimpleAnimations并且item有update 才为true
+findMinMaxChildLayoutPositions这个方法就是 找出所有子view最大和最小的2个，放在数组中
+    
+下面来到一个判断mState.mRunSimpleAnimations，通过前面的分析，可以知道，当item有变化，这个位为true
+里面会遍历所有子view，把它们的位置（top,left,right,bottom）保存在ItemHolderInfo，然后viewHolder和ItemHolderInfo保存在mViewInfoStore的map里。
+而且对于有update的viewHolder，会把mPosition和holder组成map，存进mViewInfoStore
+
+下面到第二个判断
+saveOldPositions就是遍历子view，如果holder的mOldPosition没有，那就mOldPosition=mPosition
+mStructureChanged是 当notifyDataChange会为true
+下面终于看到了onLayoutChildren
+再往下看，又是循环，还记得前一个判断调用了mViewInfoStore.addToPreLayout，这个循环就是找出不在preLayout的viewHolder，把它们加进去
+最后的clearOldPosition，就是清空viewHolder的mOldPosition和mPreLayoutPosition，包括子view和Recycler里的view
+dispatchLayoutStep1完结
+
+dispatchLayoutStep2
+又看到了AdapterHelper，这次的方法是consumeUpdatesInOnePass
+第一句进入consumePostponedUpdates方法
+   首先遍历mPostponedList，mCallback具体实现在RecyclerView里，最终调用layoutManager的onItemsXXX。这些方法在LinearLayoutManager里都是空的。
+   然后把updateOp都清理掉，consumePostponedUpdates结束
+   下面因为mPostponedList已经clear了，所以不会循环，也没干什么
+回到dispatchLayoutStep2
+后面又看到了onLayoutChildren
+再后面就是一些标志位
+
+现在进入dispatchLayoutStep3
+
+
+
+
+
+
+
+
+
+
+
+

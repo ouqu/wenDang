@@ -1,0 +1,39 @@
+class Cache
+oKhttp提供的一个缓存类，内部核心是DiskLruCache
+cache构造时创建DiskLruCache
+
+DskLruCache构造参数：FileSystem fileSystem, File directory, int appVersion, int valueCount, long maxSize,
+      Executor executor
+fileSystem:只是对file做一些封装，实际还是调用file的方法
+directory: 开发者指定的缓存文件夹
+valueCount: 这里为2
+maxSize: 开发者指定
+executor:new ThreadPoolExecutor(0, 1, 60L, TimeUnit.SECONDS,
+        new LinkedBlockingQueue<Runnable>(), Util.threadFactory("OkHttp DiskLruCache", true));
+构造就是把参数保存起来
+
+先看cache的get方法：
+把request的url转变为md5
+进入diskLruCache的get方法
+    首先要initialize(只会一次)，如果有backupFile而没有journalFile，把backup变为正式的
+       如果没有journal，就会创建tmp文件，写入头5行，再变为正式文件
+       如果有，读取journal内容，remove:lruEntries中删除  clean:加入lruEntries，把大小也保存进去entry，这里由于之前设置了valueCount = 2，所以entry中的long[] lengths 长度为2
+
+     initialize完成后，就从lruEntryies中取，没有返回null;有就返回snapShot，snapshot里会把所有inputStream打开
+     最后会构造response，body其实是fileInputStream，其他则是缓存的
+
+
+put方法（response）：
+1 首先对于post,patch,delete之类的不会缓存,只有get才会往下走
+2 如果header不合格，也不存
+3 开始缓存，调用diskLruCache的put方法：
+    先写入一条dirty
+    新建entry，保存key; entry里有2个file数组，长度为valueCount(即2)，cleanFile名字为key.i  diryFile名字为key.i.tmp (i为0到valueCount)
+    再新建Editor，保存entry到里面; 同时entry也持有Editor的引用，返回editor
+4 得到了editor，就开始写入。前面分析过，一个Key对应2个file，现在取第一个file作为metadata,得到outputstream; 写入header,url,protocol,code等等，但是不包括body
+5 返回CacheRequestImpl，这个类包装了第二个file的outputStream，在close的时候会调用editor.commit；调用abort则会调用editor.abort
+6 commit里面就是往journal写入数据，clean或者remove，然后更新总大小; 需要清理的话就清理最旧的数据
+
+
+
+

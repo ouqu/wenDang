@@ -1,0 +1,7 @@
+onTouchEvent
+ACTION_DOWN
+没有子view，返回false，不拦截
+如果正在滑动（通过scroller.isFinish()），停止滑动
+记录此时y坐标
+
+

@@ -1,0 +1,16 @@
+Address的信息一部分由URL提供，主要包括主机名和端口；另一部分由OkHttpClient提供，如dns、socketFactory等等。 
+Address（比如github.com）指定了一个webserver和所有连接到该服务器的必需的静态配置：端口、HTTPS设置和首选网络协议(HTTP/2或SPDY)。
+URLs属于同一个address的可以共享同一个底层的Socket连接。共享一个连接具有显著的性能优势：低延迟、高吞吐量(由于TCP慢启动)和省电。OkHttp使用连接池自动再利用HTTP/1.x的连接，复用HTTP/2和SPDY的连接。
+
+Routes提供真正连接到一个网络服务器所需的动态信息。这指定了尝试的IP地址(或者进过DNS查询得到的地址)、使用的代理服务器(如果使用了ProxySelector)和使用哪个版本的TLS进行谈判。(对于HTTPS连接)
+route包含address
+
+StreamAllocation
+包括client.connectionPool()和Address
+StreamAllocation.newStream():
+首先根据connectTimeout, readTimeout等，查找可用的connection
+   
+
+
+
+  

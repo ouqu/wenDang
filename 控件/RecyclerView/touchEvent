@@ -1,0 +1,113 @@
+onTouchEvent
+首先看到 dispatchOnItemTouch(MotionEvent e) 方法
+private boolean dispatchOnItemTouch(MotionEvent e) {
+        final int action = e.getAction();
+        if (mActiveOnItemTouchListener != null) {
+            if (action == MotionEvent.ACTION_DOWN) {
+                // Stale state from a previous gesture, we're starting a new one. Clear it.
+                mActiveOnItemTouchListener = null;
+            } else {
+                mActiveOnItemTouchListener.onTouchEvent(this, e);
+                if (action == MotionEvent.ACTION_CANCEL || action == MotionEvent.ACTION_UP) {
+                    // Clean up for the next gesture.
+                    mActiveOnItemTouchListener = null;
+                }
+                return true;
+            }
+        }
+
+        // Listeners will have already received the ACTION_DOWN via dispatchOnItemTouchIntercept
+        // as called from onInterceptTouchEvent; skip it.
+        if (action != MotionEvent.ACTION_DOWN) {
+            final int listenerCount = mOnItemTouchListeners.size();
+            for (int i = 0; i < listenerCount; i++) {
+                final OnItemTouchListener listener = mOnItemTouchListeners.get(i);
+                if (listener.onInterceptTouchEvent(this, e)) {
+                    mActiveOnItemTouchListener = listener;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+刚开始mActiveOnItemTouchListener为null，第一个判断跳过
+来到第二个判断，遍历所有itemTouchListener，调用其onInterceptTouchEvent方法。一旦有一个返回了true，就会记录在mActiveOnItemTouchListener，然后返回true
+回到第一个判断，调用选中的listener的onTouchEvent方法，然后如果遇到CANCEL和UP，复位。
+可见，拦截的listener不会收到DOWN，但会收到CANCEL或UP
+这个东西的作用就是，当事件被RecyclerView拦截，可以通过Listener拦截这个事件
+
+回到onTouchEvent，如果dispatchOnItemTouch返回true，表示有Listener拦截，不再往下走
+接下来，调用了layoutManager的canScrollHorizontally()和canScrollVertically()方法
+到ACTION_DOWN，记录了开始的坐标
+到ACTION_MOVE，计算dx dy，跳过nestedScroll，来到下面的判断
+if (mScrollState != SCROLL_STATE_DRAGGING) {
+                    boolean startScroll = false;
+                    if (canScrollHorizontally && Math.abs(dx) > mTouchSlop) {
+                        if (dx > 0) {
+                            dx -= mTouchSlop;
+                        } else {
+                            dx += mTouchSlop;
+                        }
+                        startScroll = true;
+                    }
+                    if (canScrollVertically && Math.abs(dy) > mTouchSlop) {
+                        if (dy > 0) {
+                            dy -= mTouchSlop;
+                        } else {
+                            dy += mTouchSlop;
+                        }
+                        startScroll = true;
+                    }
+                    if (startScroll) {
+                        setScrollState(SCROLL_STATE_DRAGGING);
+                    }
+                }
+刚开始的时候，mScrollState应该是IDLE状态，所以判断成立
+里面其实就是判断，能不能滑动，如果能滑动，mScrollState变成DRAGGING
+然后到下面的判断
+if (mScrollState == SCROLL_STATE_DRAGGING) {
+                    mLastTouchX = x - mScrollOffset[0];
+                    mLastTouchY = y - mScrollOffset[1];
+
+                    if (scrollByInternal(
+                            canScrollHorizontally ? dx : 0,
+                            canScrollVertically ? dy : 0,
+                            vtev)) {
+                        getParent().requestDisallowInterceptTouchEvent(true);
+                    }
+                }
+这个时候state变成了DRAGGING，成立
+mScrollOffset[0]和[1]在不考虑nestedScroll时，应该是0, 所以这里将x y保存到lastTouch。进入scrollByInternal
+
+boolean scrollByInternal(int x, int y, MotionEvent ev)
+consumePendingUpdateOperations()先不管
+mAdapter不为null，进入里面，看一段重要代码
+if (x != 0) {
+                consumedX = mLayout.scrollHorizontallyBy(x, mRecycler, mState);
+                unconsumedX = x - consumedX;
+            }
+            if (y != 0) {
+                consumedY = mLayout.scrollVerticallyBy(y, mRecycler, mState);
+                unconsumedY = y - consumedY;
+            }
+这里调用了layoutManager的滑动方法，还记得上一篇说过的，正常滑动的时候，传入多少就返回多少，所以这个时候consuumedY等于y，unconsumedY等于0
+而碰到边界时，consumedY等于0, unconsumedY等于y
+继续往下，如果有ItemDecorations，就会重绘。所以滑动的时候，decoration会不断绘制
+接下来，如果真的有滑动，就会调用dispatchOnScrolled，传入的2个参数就是实际滑动的距离
+这个方法会调用RecyclerView的onScrolled方法（空实现），再调用scrollListener
+最后，如果真的有滑动，返回true
+到这里scrollByInternal结束了，可以看出，RecyclerView并没有处理子view的移动，这个要由layoutManager处理
+
+回到onTouchEvent
+来到ACTION_UP, 主要调用了fling方法
+首先也是判断能不能水平或竖直滑动，加速度不能太小
+然后调用OnFlingListener，可以阻止fling
+最后使用scroller进行进行fling
+
+
+
+
+
+
+
+

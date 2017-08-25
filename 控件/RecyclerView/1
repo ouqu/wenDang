@@ -1,0 +1,39 @@
+构造：
+读取clipToPadding属性  初始化属性设置
+
+setAdapter:
+setAdapterInternal(Adapter adapter, boolean compatibleWithPrevious, boolean removeAndRecycleViews) false true
+compatibleWithPrevious是否使用原来的viewHolder和viewType
+removeAndRecycleViews是否移除和回收所有view，如果上一个参数为false，这个参数会忽略
+1 如果原来有adapter，recyclerview不再作为旧adapter的被观察者，adapter的onDetachedFromRecyclerView调用
+2 如果不使用原来viewHolder或者 使用原viewHolder但移除所有view，结束动画，调用layoutManager的removeAndRecycleAllViews和removeAndRecycleScrapInt，最后清空recycler
+3 recyclerview订阅新adapter，通知recycler adapter改变了
+4 mState.mStructureChanged = true; 把viewholder标记为invalid
+5 requestLayout
+
+setLayoutManager(LayoutManager layout)
+停止scroll
+layoutManager.setRecyclerView(this);
+
+onMeasure
+ mState.mItemCount = mAdapter.getItemCount();
+调用eatRequestLayout： mEatRequestLayout++ 如果为1并且不是layourFrozen, 则mLayoutRequestEaten = false
+如果是exactly的话，直接设置size
+mState.mInPreLayout = false;
+
+onLayout
+mState.mIsMeasuring = false
+如果mState.mLayoutStep == State.STEP_START：
+   dispatchLayoutStep1： mState.mIsMeasuring = false 。。。。。
+   layoutManager保存recyclerview的寬高
+   dispatchLayoutStep2： layoutManager.onLayoutChildren(mRecycler, mState);
+
+
+
+
+
+
+
+
+
+

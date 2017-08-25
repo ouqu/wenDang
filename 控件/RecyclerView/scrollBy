@@ -1,0 +1,56 @@
+int scrollBy(int dy, RecyclerView.Recycler recycler, RecyclerView.State state)
+1 如果没有child或者dy ==0, 直接返回0
+2 mLayoutState.mRecycle = true;
+3 layoutDirection dy > 0的话是LayoutState.LAYOUT_END（底部item要出来）再absDy
+4 updateLayoutState(int layoutDirection (END), int requiredSpace（absdy）,
+                    boolean canUseExistingSpace（true）, RecyclerView.State state) 
+    1 mLayoutState.mLayoutDirection = layoutDirection（END）; mLayoutState.mItemDirection = ITEM_DIRECTION_TAIL
+    2 获取最下边一个child，mLayoutState.mCurrentPosition = getPosition(child) + mLayoutState.mItemDirection;  
+      getPosition是获取view的layoutPosition，再加1,赋给mCurrentPosition
+    3 看
+           public int getDecoratedEnd(View view) {
+                final RecyclerView.LayoutParams params = (RecyclerView.LayoutParams)
+                        view.getLayoutParams();
+                return child.getBottom() + getBottomDecorationHeight(child) + params.bottomMargin;
+            }
+      getDecoratedEnd得到的是，这个view的下边界（y坐标），赋给mLayoutState.mOffset
+    4 getEndAfterPadding()得到recyclerView的内容下边界（y坐标），scrollingOffset就是再滑动多少距离就会到达最下边view的下边界
+    5 mLayoutState.mAvailable = requiredSpace（absdy）- scrollingOffset;
+      这里分析一下：
+      如果mAvailable<0, 即滑动后最下边view的下边界没进入recyclerView, 就是最下边view还有一部分在recyclerView外边
+      如果mAvailable>0, 即滑动后最下边的view已经全部进入recyclerView了
+    6  mLayoutState.mScrollingOffset = scrollingOffset
+    总结：updateLayoutState记录滑动方向，最上边或最下边view的position、view的边界值，此次滑动需不需要添加view
+
+5 int fill(RecyclerView.Recycler recycler, LayoutState layoutState,
+             RecyclerView.State state, boolean stopOnFocusable (false) )
+     1 如果mAvailable<0, 即滑动后最下边view的下边界没进入recyclerView，mScrollingOffset变成absdy
+     2 for (int i = 0; i < childCount; i++) {
+        View child = getChildAt(i);
+        if (mOrientationHelper.getDecoratedEnd(child) > limit(就是mScrollingOffset)
+            || mOrientationHelper.getTransformedEndWithDecoration(child) > limit) {
+          // stop here
+          recycleChildren(recycler, 0, i);
+          return;
+        }
+      }
+        这段循环找出，移动了limit之后，位于最上面的view; 那么这个view的上面那些view可以回收掉（它们已经超出了recyclerView）
+        这个Limit就是layoutState的mScrollingOffset，前面我们说到，这个mScrollingOffset会变，那来分析一下
+        第一种情况，滑动后最下边view的下边界没进入recyclerView，这时mScrollingOffset就是absdy滑动距离，这个容易理解
+        第二种情况，滑动后最下边view的下边界已经进入recyclerView里面了，这时mScrollingOffset就是滑动多少最下边的view刚好全部进入recyclerView，就是说最下边view刚好全部进入recyclerView时就要开始回收 （讲得有点乱～，见谅）
+        3 现在开始recycleChildren，传入的参数0和i 表示回收从0到i-1的view，调用的是layoutManager的removeAndRecycleViewAt（index, recycler）
+           具体是让recyclerView remove掉view，然后调用recycler.recycleView()，viewHolder会进入Recycler的mCachedViews（arrayList），如果mCachedViews已满，那就放到ReycleViewPool
+        4 现在回到fill方法，我们已经完成了回收view，接下来就要添加view。 
+          首先看remainingSpace，还记得前面说过的，mAvailable>0就是最下边的view滑动后会完全进入recyclerView，那remainingSpace会大于0
+           再看下面的while，循环的条件是remainingSpace大于0并且还有数据，为什么要用while？应该是刚开始的时候要填满recyclerView。 添加view就在layoutChunk方法里面，进去看看：
+          添加view调用了layoutManager的addView方法
+          然后，measureChildWithMargins(view, 0, 0)就会调用view.measure，里面比较简单，会考虑padding,margin,decoration。值得注意的是，例如recyclerView垂直方向滚动，view的垂直方向是wrap_content，那view最终得到的specMode是UNSPECIFIED
+          然后调用getDecoratedMeasurement(view)，垂直情况下，得到view的高度+上下margin+上下decoration，注意因为调用了view.getMeasuredHeight，所以要先测量。
+          接下来，我们看VERTICAL，RTL是rightToLeft，一般用不上，所以直接看else。其实这一段就是计算添加的这个view的left, right, top, bottom四个参数，就是放在哪里，比较简单。
+          layoutDecoratedWithMargins这个方法真正放置view，后面4个参数就是view加上margin加上decoration后的结果，传入之后，又会计算出view的实际大小。 
+          总结：fill方法做了回收view和添加view两件事。通过判断滑动后view会不会完全滑出来决定回收，添加view的条件是出现空白空间并且还有数据，先add到recyclerView，再测量view，再决定view的最终位置
+
+      后面有个scrolled变量，根据打LOG，正常滑动的时候就是dy
+      下面的mOrientationHelper.offsetChildren(-scrolled) 就是移动子view
+
+

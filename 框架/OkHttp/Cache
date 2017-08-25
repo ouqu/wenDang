@@ -25,6 +25,16 @@ CacheInterceptor
 如果request和response其中一个设置了noStore, 不返回缓存
 如果request设置了nocache,或者request有if-modified-since或If-None-Match
 
+进行网络请求，得到结果
+如果有缓存并且结果为not modified，那就以缓存为主，合并结果，关闭结果的body，返回缓存
+如果有缓存并且结果不是Not modified，那就关闭缓存的body，把缓存保存到结果中，
+如果需要缓存新数据，这个时候我们并不能直接从网络结果那里读取并写入缓存，因为读完就没了，这样客户端就读不到了
+这个问题是这样解决的，客户端读取的同时，写入到缓存里。
+现在可以理解为什么cache的put方法要返回一个文件的outputStream
+这里需要注意的是，如果客户端还没读完那就把流关闭了，那缓存是写入失败的，也就是说并不会缓存
+
+最后返回response
+
 
 
 

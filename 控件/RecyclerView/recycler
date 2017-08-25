@@ -1,0 +1,63 @@
+public static class RecycledViewPool {
+        private SparseArray<ArrayList<ViewHolder>> mScrap = new SparseArray<ArrayList<ViewHolder>>();
+        private SparseIntArray mMaxScrap = new SparseIntArray();
+
+mScrap存放的是，每一个viewType对应的缓存viewHolder们，这些viewHolder装在arrayList中
+mMaxScrap，每一个viewType对应着最多缓存多少个viewHolder
+
+put: 找到viewType对应的arrayList，没有则new一个; 如果达到了最大直，那就不放了，
+get：根据viewType找到对应的arrayList，没有就返回null
+
+现在我们假设一种简单的情况，就是一个竖直方向的RecyclerView，只能上下滑动
+先看回收view，看Recycler类，进入recycleView(View view)方法
+开头那些判断先不管，直接进recycleViewHolderInternal方法
+recycleViewHolderInternal
+会执行的重要代码就这段, holder就是view的viewHolder
+if (!holder.hasAnyOfTheFlags(ViewHolder.FLAG_INVALID | ViewHolder.FLAG_REMOVED
+                        | ViewHolder.FLAG_UPDATE)) {
+                    // Retire oldest cached view
+                    int cachedViewSize = mCachedViews.size();
+                    if (cachedViewSize >= mViewCacheMax && cachedViewSize > 0) {        
+                        recycleCachedViewAt(0);
+                        cachedViewSize --;
+                    }
+                    if (cachedViewSize < mViewCacheMax) {
+                        mCachedViews.add(holder);
+                        cached = true;
+                    }
+                }
+这个mCachedViews就是一个ArrayList，第一个判断意思是，如果list已经达到最大值，那就把第一个扔到RecycleViewPool，再加到list的最后一个。
+第二个判断就是如果list没到最大值，那就加到list里面。正常来说，第二个判断都会执行。
+这里其实是二级缓存，第一级是mCachedViews，第二级是RecycleViewPool。
+对于recycleCachedViewAt(0)方法，点进去你会发现，它会调用adapter的onViewRecycled方法，而且如果你给Recycler设置了监听RecyclerListener，里面的onViewRecycled也会调用。
+进入RecycleViewPool时还会把viewHolder内部的标志位重置。
+
+回收view看完，现在来看获取view
+detachAndScrapAttachedViews
+会调用getViewForPosition(int position, boolean dryRun)
+
+1 直接看到方法 getScrapViewForPosition(position, INVALID_TYPE, dryRun) （dryRun为false）
+     首先从mAttachedScrap开始找，再从隐藏的view找，最后从mCachedViews找。
+     mCachedViews上面讲过了，来看一下mAttachedScrap，这是个ArrayList。
+     还记得刚开始的时候，layoutManager的onLayoutChildren会调用2次，第二次调用时，会先调用Recycler的detachAndScrapAttachedViews方法，这个方法会把所有view从RecyclerView detach，再加入mAttachedScrap。
+     所以这个时候，从mAttachedScrap就能得到。
+2 第一个方法得不到，就会尝试从mViewCacheExtension获取。这个是开发者自定义的。
+3 还是得不到，就从RecycleViewPool里取
+4 还是得不到，那就调用adapter去创建viewHolder
+以上就是找viewHolder的过程，找完之后，还要判断要不要bind，主要通过viewHolder的状态位判断。
+getViewForPosition就结束了
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

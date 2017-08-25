@@ -1,0 +1,10 @@
+detachAndScrapAttachedViews
+所有view从RecyclerView detach，并且添加TEMP_DETACH标记
+Recycler: viewHolder会保存Recycler，然后加到mAttachedScrap
+ViewInfoStore: mLayoutHolderMap根据viewHolder查找InfoRecord，若找到，去除disappeared标记
+
+再次拿view的时候，位置发生变化的view要不要原样返回(mAttachedScrap)，取决于是不是在prelayout。在的话原样返回，不在的话从RecycledViewPool
+addView:
+1）如果是是被remove的view（在prelayout），ViewInfoStore里的record会加disappeared标记; 否则去除disappeared标记
+2）如果从mAttachedScrap返回的，要从mAttachedScrap中去除，viewHolder去除return_from_scrap标记，并attach到parent
+3) 如果不是从mAttachedScrap返回，那就要调用RecyclerView的addView
