@@ -1,0 +1,29 @@
+动画从BackStackRecord讲起
+BackStackRecord成员：
+int mEnterAnim;
+int mExitAnim;
+int mPopEnterAnim;
+int mPopExitAnim;
+int mTransition;
+int mTransitionStyle;
+
+OP成员：
+int enterAnim;
+int exitAnim;
+int popEnterAnim;
+int popExitAnim;
+int cmd;
+Fragment fragment;
+
+backStackRecord的方法setCustomAnimations(int enter, int exit,
+  int popEnter, int popExit) 就是保存起来
+
+在addOp方法里，op的enter,exit,popenter,popexit会取backStackRecord里的值。
+就是说，调用了setCustomAnimations，表示之后的add,replace之类的操作都会使用这个动画，所以要先设置animation。
+
+那setTransition和setTransitionStyle，这2个变量只保存在backStackRecord里
+
+好，现在到run看看
+
+对于小于5.0的系统：
+优先级：fragment.onCreateAnimation, fragment.nextAnim(从op中来，也就是从setCustomAnimation来)， transtion

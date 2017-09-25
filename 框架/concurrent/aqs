@@ -1,0 +1,41 @@
+队列同步器
+继承AbstractOwnableSynchronizer
+   内部成员Thread，记录持有锁的线程，提供get和set方法
+
+Node: 双向链表
+成员：Thread
+Node next,prev
+int waitStatus: canceled超时或中断，不参与竞争
+                signal 当前释放或取消会通知后继节点
+                condition 等待在condition
+
+方法：
+addWaiter(Node mode(传入类的一个静态成员))
+1 用currentThread生成newNode
+2 若tail为null，跳到4。先缓存tail，newNode的上一个指向tail
+3 使用cas，如果当前aqs对象的tail域仍然指向缓存的tail，则把tail域指向newNode，完成链表，返回newNode; 如果失败，继续
+4 不断循环cas操作，设置tail
+
+出列不需要加锁，因为只有一个线程成功获取
+
+acquire(int arg)
+1 首先尝试获取，成功直接返回
+2 失败则添加到tail，再看如果前一个是head，再次尝试，成功则把newNode清空并变为head,返回。
+3 如果前一个是signal，需要阻塞。如果是cancel，将前一个删掉，一直向前直到不是cancel; 这时应该要重试
+4 阻塞是调用了lockSupport.park方法
+
+release(int arg)
+1 调用tryRelease，返回false则结束
+2 如果head的next不为null并且不是cancel，则lockSupport.unpark（next.thread）
+  如果为null或者是cancel，从尾部开始找，找到了就unpark
+
+acquireInterruptibly
+跟acquire差不多，中断会跑异常
+
+tryAcquireNanos （响应中断）
+先尝试，成功直接返回true
+若失败，进入循环：尝试，计算距离deadline还有多久，如果小于1000那秒，继续循环; 否则park一段时间
+
+
+
+

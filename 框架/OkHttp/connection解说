@@ -1,0 +1,22 @@
+StreamAllocation构造方法：
+保存connectionPool，address，构造routeSelector(address,routeDatabase)
+
+findConnection:
+首先streamAllocation里面有一个connection成员，如果这个成员不为null并且其noNewStream标志为false，返回这个connnection
+
+然后到connectionPool里面找
+connectionPool里面有arrayDeque，放connection，connection的成员有StreamAllocation，一个connection只能引用一个streamAllocation，表示其属于该streamAllocation；还有noNewStream这个boolean标志
+首先遍历arrayDeque，如果已经有streamAllocation或者noNewStream==true，不合格
+                   如果connection的address和传入的address对象，dns,proxy,ssl等有一个不一致，也不合格
+              如果host一样，那就可以
+             遍历找到了，那就让streamAllocation保存这个connection，同时connection也要保存streamAllocation
+
+这时，我们需要routeSelector生成一个route
+routeSelctor包括list放inetSocketAddress，route包括address,inetsocketaddress
+routeDatabase保存set放route，表示失败的route
+routeSelector还有一个list放着失败过的route，当上一个list用完了，才会用这里面的
+next方法就先从第一个list取，如果是失败过的，添加到失败list中，再找; 找不到了就从失败list中找。
+
+带着这个route，再到pool里面找， 找到了，返回
+没找到，构造connection，pool和route作为参数，并且放到connectionPool里面。
+connection.connect，

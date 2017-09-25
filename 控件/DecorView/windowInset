@@ -1,0 +1,18 @@
+View:
+WindowInsets dispatchApplyWindowInsets(WindowInsets insets)
+1 privateFlag3加上applying insets flag，方法执行完会去除flag
+2 如果有onApplyWindowInsetsListener，调用listener，返回
+3 调用onApplyWindowInsets(WindowInsets)真正处理的
+4 如果没有fitting system windows flag，调用fitSystemWindows
+   fitSystemWindows：这里是传入Rect, WindowInsets内部有一个Rect，但这个Rect并不会直接给你，它会copy一份，就是构造一个tmpRect，复制到里面。参数的Rect就是tmpRect。
+   讲完参数，看方法，就是调用了fitSystemWindowsInt(Rect)。其实不管有没有fitSystemWindows flag，都是调用fitSystemWindowsInt.
+   看fitSystemWindowsInt，如果没有fitSystemWindow flag，返回false。 如果有，调用computeFitSystemWindows，会把传入的Rect复制到 localRect，然后传入的Rect清零，返回true，
+
+  总结一下，有listener，调用listener并返回结果。没有listener，再看有没有fitSystemWindows flag，没有，原样返回; 有，对于用户view消耗全部insets; 对于系统view，如果有hide navigation或layout fullscreen flag其中一个，不会消耗insets。
+所以DecorView下的LInear，设置了fitSystemWindow，但它是系统view，当设置了layoutFUllScren时，不会消耗insets。
+
+   对于ViewGroup，先调用View的dispatchApplyWindowInsets，如果没有消耗，再逐个调用子view的dispatch方法，第一个消耗了，就会停止遍历。
+
+
+viewRootImpl开始performTraversals，首先调用DecorView的dispatchApplyWindowInsets，调用onApplyWindowInsets，DecorView重写了方法，
+就是首先看状态栏，根据system ui决定要不要添加状态栏view，设置底部margin,可能会消耗底部inset，

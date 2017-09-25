@@ -1,0 +1,35 @@
+队列同步器
+继承AbstractOwnableSynchronizer
+这个类有成员thread，是记录持有锁的线程，提供get和set方法
+
+aqs成员有双向链表，Node head,tail用来存放等待的线程，Node里面除了thread，还有int waitStatus,有signal canceled condition
+
+acquire流程：先调用tryAcquire（子类重写），成功直接返回。
+失败，调用addWaiter,第一次会使用cas设置head和tail指向同一个node(无参构造)，然后cas将新构造包含当前thread的node 添加到tail (头结点没有thread
+再检查前一个如果是head，tryAcquire，成功了就把新构造的node设置为head，thread=null，返回。
+还是失败，如果前一个node是signal，那就进入阻塞。如果是取消，往前找到不是取消状态的，插到前面去，不阻塞，回到判断前一个是否head。如果是其他状态，cas 前一个node的waitStatus设置为signal,不阻塞。
+阻塞正常唤醒或者打断唤醒，重新检查前一个如果是head，循环。
+打断醒来后都会调用当前thread的interrupt方法。
+acquire不响应中断
+
+acquireInterruptly
+类似的流程，只是被打断时直接抛异常，还要往前找第一个不是cancel的node，如果被打断的node本身是tail，使用cas把tail设置为第一个不是cancel的node; 如果不是tail，
+表明后面还有node，此时如果刚才找到的那个NODE就是head，那就唤醒node后面的。
+如何唤醒，如果后面一个不是cancel，直接唤醒; 否则从尾部开始到本node，找到了就唤醒。
+如果刚才找到的那个NODE不是head，那就把这个node设置signal，next指向被cancelnode的next
+
+AcquireNanos
+打断会退出，超时也会退出
+同样tryAcquire失败, 会addWaiter，在看前一个是不是head，尝试
+进入阻塞时会设置时间，当间隔小于1000纳秒时不会阻塞，影响精度。
+超时未获取lock会返回false
+
+
+acquireShare return int
+addWaiter之后，如果获取成功,返回值大于0或者head不是cancel，并且下一个node是share的（Node有成员nextWaiter，取值为静态常量2个Node, SHARED和EXCLUSIVE），就会唤醒后继节点
+
+
+
+
+
+

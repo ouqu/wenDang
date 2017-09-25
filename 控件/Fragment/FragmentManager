@@ -1,0 +1,74 @@
+FragmentManagerImpl
+beginTranstion: return new BackStackRecord(FragmentManagerImpl)
+
+BackStackRecord:
+replace,add: 最终调用doAddOp(int containerViewId, Fragment fragment, String tag, int opcmd)
+1 fragment拿到fragmentManager的引用
+2 若fragment已经有tag，传入的tag必须相同；若已有fragmentId,则必须等于containerId
+3 构造Op，保存cmd和fragment
+4 调用addOp(op)，每个BackStackRecord内都有一个op链表，这个方法把op加入链表
+
+remove, hide, show,detach,attach都是直接调用addOp
+addToBackStack: mAddToBackStack=true，mName = name
+
+commit(boolean allowStateLost)
+1 只能commit一次，
+2 如果要addToBackStack: fragmentManager把backStackRecord存入arrayList并返回index，backStackRecord保存这个index。index为-1表示没有添加到backStack
+3 调用fragmentManager的enqueueAction(Runnable action, boolean allowStateLoss)
+ 这个方法会把action放入arrayList，然后如果是第一个放入的，就往主handler插入Runnable，去执行这些backStackRecord的。
+相当于把执行延后了
+
+现在来看BackStackRecord的run方法
+就是遍历Op，先来看add
+add:fragmentManagerImpl内有个叫mActive的ArrayList，放fragment; 如果fragment是active的，那fragment内部变量mIndex就是在arrayList的index，如果不active，mIndex为-1
+1 如果fragment未active，添加到mActive中，并设置fragment的mIndex
+2 如果fragment处于detach状态，什么也不做
+3 不处于detach状态，加入到mAdded的ArrayList中，fragment的mAdded为true,mRemoving为false. 结束	
+
+remove:
+从mAdded中去除fragment,fragment的mAdded为false,mRemoving为true
+
+moveToState(Fragment f, int newState,boolean keepActive):
+首先，state有6种，initial,created,activity_created,stopped,started,resumed
+1 如果fragment不是added的，那newState最高只能到created
+2 如果fragment是removing，newState最高只能到fragment当前的state
+3 接下来，分为state升高和降低2种情况
+  升高：
+        如果fragment来自layout，但还没进入layout，return
+        initialing:fragment保存hostCallback，parentFragment，fragmentManager
+                   然后运行onAttach(context)
+                   performCreate,fragment的state进入created，调用oncreate
+                   然后如果来自layout，performCreateView，值得注意的是，传入的container是Null。创建完view之后，onViewCreated
+        created:找到container，createView，把view加到container，调用onActivityCreated。还有一点，fragment hide就是view设置为gone
+         接下来就是onStart,onResume
+
+   降低：
+        resumed: performPause
+        started: performStop
+        stopped:performReallyStop
+        activity_created: performDestroyView, container.remove(view),fragment.container,view,innerview = null
+        created: performDestroy  performDetach
+                 如果不需要keepActive，fragmentManager的mActive对应index设为null,同时mAvailIndices(ArrayList<Integer>)增加index
+ 
+回到removeFragment，会降到initial,
+
+replaceFragment: 会遍历fragmentManager的mAdded，对于同一个containerId的fragment会remove掉，最后再add
+
+hideFragment: 如果fragment已经hide，return
+              将view设置为gone，调用onHiddenChanged
+showFragment:类似
+
+detach：fragment的mDetached为true, fragment从mAdded中移除，fragment降到created，也就是onDestroy onDetach不会调用
+attach: fragment的mDetached为false，fragment添加到mAdded中，fragment升到当前state
+
+最后，op全部调用完了，fragmentManager会对mActive所有fragment调用moveToState
+如果要addToBackStack，BackStackRecord会被存入另一个arrayList中，调用onBackStackChangeListener
+
+
+对于popBackStack，也是调用BackStackRecord的方法，会从op链表的尾部开始，反操作
+
+对于FragmentActivity
+oncreate: moveToState(created)
+onStart: moveTOState(Activity_created), 执行所有BackStackRecord，然后moveToState(start)
+
+

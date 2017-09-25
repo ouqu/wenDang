@@ -1,0 +1,14 @@
+thread: ThreadLocalMap
+
+threadLocalMap创建：
+参数：ThreadLocal firstKey, Object firstValue
+里面有一个数组保存Entry, 每个ThreadLocal带有HashCode，通过hashcode与数组大小相与，得到index,放进去
+
+set:
+找到当前线程，获得threadLocalMap对象，首先把threadLocal的hashcode值与数组大小相与，得到index，找到对应的threadLcoal，再看是不是同一个threadLocal，
+
+
+ThreadLocal底层的数据模型是ThreadLocalMap，该Map是一个基于开放地址法实现的哈希表，key是当前的threadlocal对象，value是当前线程放在这个threadlocal里面的值；
+每个线程持有一个ThreadLocalMap对象A，A里面放的是和当前线程相关的threadlocal；
+如果认真看过源码，还会知道ThreadLocalMap的实现和WeakHashMap实现有异曲同工之妙，都通过WeakReference封装了key值，防止可怕的内存泄漏；
+再举个get()数据的例子。第一步得到当前线程；第二步获取当前线程对应的ThreadLocalMap；第三步以当前threadlocal对象为key，去ThreadLocalMap中把值捞出来；	

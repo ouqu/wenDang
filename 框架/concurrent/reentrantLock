@@ -1,0 +1,8 @@
+抽象静态内部类Sync extends AbstractQueuedSynchronizer
+这个类把成员int state作为锁的标志，为0表示没有被占用，在nonfairTryAcquire(int acquires)中，如果获取成功或当前线程已经是持有锁的线程，就会把state加上形参
+
+tryRelease(int releases)
+必须由持有锁的线程调用，会把state减去形参，如果state减为0,返回true; 否则返回false
+
+静态内部类 NonfairSync extends Sync
+tryAcquire方法就是调用在nonfairTryAcquire

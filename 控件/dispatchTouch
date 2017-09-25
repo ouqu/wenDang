@@ -1,0 +1,20 @@
+dispatchTransformedTouchEvent(MotionEvent event, boolean cancel,
+            View child, int desiredPointerIdBits)
+
+第二个参数表示是否要取消，一般是viewGroup拦截了
+child如果为null，表示就会调用viewGroup的onTouchEvent
+
+首先，如果cancel或者event为cancel，就给child发action_cancel，返回
+然后如果child不为null, 需要调整传进去的action的x,y，转为相对子view的。原x减去child.left加上scrollX，考虑了scroll。调用子view的dispatchTouchEvent
+如果child为null，就调用viewGroup的方法
+
+
+dispatchTouchEvent:
+对于down或者已经有子view接收事件，那就会调用onInterceptTouchEvent
+对于down，如果不拦截也不是cancel事件，那就会从子view队列从后往前遍历，对每一个view，必须是visible并且在子view的范围内，然后就会调用dispatchTransformedTouchEvent
+如果子view返回true，就会跳出循环，同时保存target为子view，然后返回。
+如果全部子view都不消费，那就调用viewGroup的方法。
+
+down搞完，如果子view都不接收，viewGroup接收，那viewGroup就会接收事件; 如果有子view要接收，那就会交给子view，如果子view接收中途返回了false，那下一个事件就会又父view来消费。
+
+

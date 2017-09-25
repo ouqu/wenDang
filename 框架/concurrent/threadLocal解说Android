@@ -1,0 +1,32 @@
+Android版本有点差异
+ThreadLocal依然有静态变量atomicInteger和静态常量HASH_INCREMENT= 0x61c88647 * 2
+成员变量依然有hash，还多了个Reference，是WeakReference。
+
+thread的threadLocalMap变成了Values类，这个类有object数组，偶数下标放reference，奇数放value，省略了entry
+values类成员size threshold tombstones clean
+对于偶数下标，有3种类型：null TOMBSTONE reference
+
+set方法：
+也是获得当前线程的Values对象，没有的话构造一个。有的话，调用values.put
+values.put: 首先要清理，
+           第一步，检查size(ref数量)+tombstones(tomb数量)是否大于threshold，小于的话不需要新建数组。
+          如果大于，那就要新建数组了，容量是否要double，取决于size是否超过容量的一半。新建好了，就把旧数组的有效ref移到新数组里，按照hash&len -1决定位置，没坑往后找位置。
+          如果新建了数组，那清理就结束了。
+          现在小于threshold，需要清理一下，这个清理也很简单，就是若ref指向的对象已经被回收，那就把key置为tombstones,value=null, size--, tombstones++;其他跳过
+          注意，这里并不是遍历数组，for循环次数为log2容量+3，例如容量为16,循环次数为4+3=7次。有一个clean成员变量记录上一次清理到的位置。因为遍历数组可能花时间比较长。
+清理搞完了，开始put。清理完了，肯定有空位。
+
+如果坑没有被占，或者那个位置就是自己，那就简单了。
+不然，往后面找，如果遇到了tombstone，记下第一个tombstone的位置。如果找到了自己，直接更新值返回。如果遇到了null表明没有找到, 如果有tombstone那就放到tombstone那里，没有tombstone，直接放到null那个位置。
+
+remove
+先cleanup
+就是从理想位置开始，往后找，直到null。找到了就置位tombstone，value=null
+
+get
+如果理想位置找到了，返回
+理想位置为null,放进去,cleanup一下，返回
+没命中，王后面找，到了null，若前面没有tombstone，直接放，cleanup; 如果有tombstone,代替tombstone
+
+总结 在set和remove开头都会cleanup，大部分时间只是把无效的置位tombstone，等到超过threshold才新建数组。
+

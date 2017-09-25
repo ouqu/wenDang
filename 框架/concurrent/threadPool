@@ -1,0 +1,33 @@
+Future<V>接口
+boolean cancel(boolean 如果正在进行是否打断) 返回取消是否成功，一般已经完成会返回false
+boolean isCanceled() 在完成之前是否已经取消
+isDone() 返回true表示已完成，跑异常，被取消
+V get() InterruptedException, ExecutionException,CancellationException
+V get(long timeout, TimeUnit unit)
+        throws InterruptedException, ExecutionException, TimeoutException;
+
+RunnableFuture<V> 接口，结合Runnable,Future
+
+FutureTask implement RunnableFuture
+
+
+ThreadPool
+32位int表示状态，高3位表示状态，低29位表示线程数量
+状态-1： running
+     0: shutdown
+     1: stop
+     2: tidying
+     3: terminated
+
+private final class Worker
+        extends AbstractQueuedSynchronizer
+        implements Runnable
+  成员：thread
+        volatile long completedTasks;
+  
+        Worker() {
+          setState(-1);
+          thread = getThreadFactory.newThread();
+        }
+
+

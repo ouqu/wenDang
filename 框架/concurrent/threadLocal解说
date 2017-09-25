@@ -1,0 +1,39 @@
+threadLocal这个类，静态变量atomicInteger,初始值为0,然后还有一个静态常量HASH_INCREMENT，0x61c88647。至于为什么是这个值，网上说这个值可以使后面与操作得出的值分布尽量均匀，具体原理还在研究。
+这个类有一个int成员，作为这个threadLocal的hashcode，构造的时候，这个int的值等于atomicInteger加上HASH_INCREMENT
+
+先看thread对象有一个成员，ThreadLocalMap对象，里面有一个放entry的数组，数组初始容量为16，这个entry是什么？entry里面有2个成员，弱引用ThreadLocal，强饮用object value。其实就是把threadlocal和value封装起来。
+
+先看threadLocal的set方法，首先Thread.currentThread获取当前执行的thread对象，从中拿到threadlocalMap，如果map为null，那就构造一个，把threadlocal和value封装成entry，threadlocal.hashcode与Len -1, 得到数组下标，就放在那个位置就行了。
+
+如果threadlocalmap已经存在，调用map的set方法：
+也是把threadlocal的hashcode与len -1，如果那个位置正好为null，那就直接把entry放进去，然后开始清理（这个清理方法很常见）： 从这个位置开始向后，结束条件为遇到null，遍历中如果遇到引用已经被回收的entry，表示entry已经无效，把这个位置置为null；如果遇到有效的entry，检查其hashcode与len -1是否是这个entry所在的位置，如果不是就尝试把其放回最好的位置。
+尝试的意思就是说，例如hashcode与len -1就是最好的位置，如果这个位置被占了，那就往后找空位塞进去。
+
+清理完成，还要判断清理中有没有删除entry，如果有，那set方法到此结束。
+如果没有，还要检查当前size（threadlocalmap的成员变量int，记录entry数量），是否大于threadhold（三分之二的数组长度），小于的话，set方法结束
+如果大于，那就要把整个数组遍历一遍，再清理一遍，如果清理完的size小于二分之一数组长度，set方法结束。
+如果大于二分之一数组长度，那就要扩容了
+扩容：
+就是把数组长度乘以2,然后把旧数组有效的entry放入新数组中，放入位置也是hashcode&len -1，如果坑已被占，向后找，最后记录新的size，set方法结束。
+
+前面考虑的情况是插入位置正好为null，那如果不是null呢？哈兮碰撞是有可能的，所以这种情况下，就会往后面找，找的过程又要分情况讨论。
+如果往后面走，遇到了一个entry，其threadlocal正是插入的threadlocal，那就简单了，只需要更新一下value值，结束。
+如果遇到的每一个entry都是有效的，那最后只能是遇到Null，把entry放入空位里，然后也要清理，和最开始讲到的正好位置是一样的。
+如果遇到了一个无效的entry，这里有点复杂，认真想，
+这个时候，无效entry的2边都要清理，先看左边的清理范围，从无效entry往前，直到null范围，这里清理方法同上。右边的清理也类似。
+插入entry也是类似的，从无效entry往后，如果遇到了threadlocal正是插入的，更新value，把这个entry移动到无效entry那里。如果找不到，那就构造新entry，把无效entry替换掉。
+
+set方法终于结束了。
+
+再看get方法
+也是获取当前线程的threadlocalmap，如果没有，那就调用initialValue获取初始直，作为value，新建map，把threadlocal和value插入进去。
+如果已经有map，也是threadlocalhashcode&len -1，
+    如果那个位置是null，返回null;
+    如果那个位置正好就是，返回entry.value
+    如果不是，那就往后面找，遇到无效entry还是要清理，找到了就返回value; 如果遇到了Null还是没找到，返回null
+如果找不到，又会调用initialValue方法，set进去。
+
+remove方法
+套路类似，找到hashcode&len -1，往后找，遇到null为止。找不到，直接返回，找到了，清理。
+
+清理无处不再啊～
