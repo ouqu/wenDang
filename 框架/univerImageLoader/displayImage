@@ -1,0 +1,52 @@
+参数：
+String uri, ImageAware imageAware/* 包装了imageView */,
+ DisplayImageOptions options/*包括loadingres,等等 */,
+ImageSize targetSize, 
+/*
+  从imageAware中获取宽高，如果小于等于0, 会从configuration中获取	
+*/
+ImageLoadingListener ImageLoadingProgressListener 可以为Null，会使用默认的
+
+memoryCacheKey为url加上寬高
+cacheKeysForImageAwares是一个线程安全的hashmap，key是imageview的hashcode，value是memoryCacheKey
+保存了imageview正在加载哪一个图片
+
+接下来就是从内存中取，memorycache，如果有bitmap并且没有recycle：
+1 检查有没有设置显示之前的监听，这个以后再看
+2 没有监听，那就调用displayer来显示，就是imageview.setbitmap，结束
+
+内存没找到
+1 需要的话，显示loading image
+2 构造ImageLoadingInfo，参数：uri, imageAware, targetSize, memoryCacheKey,
+options, listener, progressListener,
+ engine.getLockForUri(uri) /*
+   engine有一个hashmap，key是url,value是reentrantLock
+*/
+
+3 构造LoadAndDisplayImageTask 参数：engine, imageloadinginfo, 主handler
+然后就交给engine了
+
+engine里面有3个线程池，1 taskDistributor cache 
+2 taskExecutorForCachedImages 用来执行从disk中加载图片，fixsize线程池，默认核心3线程，用linked无界队列  
+3 taskExecutor 网络加载，默认和第二个一样的配置
+
+engine首先在cache线程池里执行：
+首先从diskcache中获取，如果有，放在taskExecutorForCachedImages线程池执行; 否则放taskExecutor执行
+现在来看run方法
+1 可以pause delay
+2 获取engine的url对应的锁，然后检查view是否被回收(imageAware有弱饮用)，或者imageview对应的图片是否已改变。因为等待线程池的调度需要一点时间，这段时间内可能发生了变化。
+如果回收或被复用，抛异常，回调到主线程调用listener的onCancel
+3 这时再次从内存中取，如果有那就找到了
+4 没有，从disk中取，不行的话就从网络了。disk或者网络，都可以变成从uri加载图片
+ 构造ImageDecodingInfo，参数：memoryCacheKey, imageUri, uri, targetSize, viewScaleType,getDownloader(), options
+   然后调用BaseImageDecoder的decode方法
+
+现在进入重点了
+1 获得inputstream，从BaseImageDownloader的getStream，
+  对于file，fileinputstream -> bufferedinputstream -> contentLengthInputstream(就是保存了file的Length，通过available()获得)
+
+   对于网络，使用httpurlconnection，类似的包装
+
+   有了inputstream，获取图片原始宽高，然后重新获取stream，因为前面已经消耗了。
+   开始缩放，根据FIT_INSIDE(图片整张显示)或者CROP(图片的宽或者高其中一个小于target就行), 最后使用bitmapFactory生成bitmap
+   把bitmap放进memorycache，最后回调到主线程

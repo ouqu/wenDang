@@ -1,0 +1,47 @@
+ViewFlinger的run方法
+主要流程：
+1：scroller.computeScrollOffset计算当前滑动总距离
+2 有成员mLastFlingX和mLastFlingY，保存上一次的滑动总距离，这样获取当前的距离减去上一次的，就可以知道这次应该滑动多长。调用layoutManger的scroll方法
+3 调用smoothScroller.onAnimation，传入参数为这次滑动了多少
+4 如果已经到边界，停止滑动
+5 如果smoothScroller等待启动，调用smoothScroller.onAnimation(0, 0)
+
+现在来看action_up时候的自己滑动
+在action_up时候，会计算当前速度，再看水平和竖直能否滑动，如果小于最小速度，不滑动; 当然也有最大速度的限制
+最终调用到ViewFlinger的fling方法
+fling(int startX, int startY, int velocityX, int velocityY,
+            int minX, int maxX, int minY, int maxY)
+startx starty都是0
+velocityx y 就是速度 ，如果某个方向不能滑动 那就是0
+minx等等都是integer.max/min
+
+然后调用了OverScroller的fling方法，多了2个参数int overX, int overY，都是0
+overScroller里面有2个成员，都是SplineOverScroller类的，叫scrollerX和scrollerY,分别控制x和y方向的scroll
+在fling里面，进一步调用这2个scroller的fling方法，
+fling(int start, int velocity, int min, int max, int over) {
+    //      0          速度        minvalue   maxvalue   0
+            mOver = over;
+            mFinished = false;
+            mCurrVelocity = mVelocity = velocity;
+            mDuration = mSplineDuration = 0;
+            mStartTime = AnimationUtils.currentAnimationTimeMillis();
+            mCurrentPosition = mStart = start;
+            mState = SPLINE;
+            double totalDistance = 0.0;
+开始就是保存值
+第一个计算，计算duration，保存在mDuration，mSplineDuration：
+   就是根据速度，再进行log,e.....运算得到
+第二个计算，计算distance，保存在mSplineDistance
+   根据速度算出，然后 mFinal = start + mSplineDistance;
+fling完成，其实就是根据速度计算duration和distance
+
+再来看overScroller.computeScroll()
+具体计算还是交给scrollerX和y, 
+ScrollerX和Y是SplineOverScroller，有静态数组SPLINE_POSITION，有101个元素，最小0,最大1. 增长特点是先快后慢，类似于sin函数前半部分
+开始计算了，通过AnimationUtils获取当前时间，和开始时间，duration比较，得到已经进行的百分比(就是百分之多少)，通过这个多少可以从SPLINE_POSITION表中查到对应的值，使用微元法近似出斜率，再乘以总distance除以总duration，再乘以1000,就得到当前速度了
+然后当前距离(currentPosition)，近似就是从表里得到的数值 再乘以总distance
+可以看出，速度是逐渐变慢的(因为斜率在变小)，距离的增加也会越来越慢
+
+
+
+

@@ -1,0 +1,21 @@
+ImageLoaderConfiguration
+使用builder模式建造，保存在imageLoader中，
+
+viewAware
+getWidth: 对于在layoutParams中固定了尺寸的view，先尝试view.getWidth，小于等于0的话，就取layoutParams中的width
+对于wrap_content和match_parent,返回layoutParams中的值
+
+ImageViewAware
+getWidth; 使用super方法获取，如果小于等于0,获取mMaxWidth
+getScaleType: imageView的fit。。。 都是 fit_inside
+                         其他      都是crop
+
+ImageSize:
+有height和width，一般就是把imageviewaware的width和height保存起来
+
+cache名字：uri_width_height
+
+把imageView的id和cache名字对应关系保存起来
+
+submit任务
+首先在cache线程池，尝试从disk获取（uri），成功或失败都会在相应的fix线程池放入任务

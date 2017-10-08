@@ -1,0 +1,13 @@
+submit(Callable)
+newTaskFor(callable)
+ return FutureTask<T>(callable)
+
+FutureTask<V> implement RunnableFuture<V>
+成员： Thread runner;
+构造： this.callable = callable;
+       this.state = NEW;
+
+void run() {
+  if state != NEW 或者 cas runner变成currentThread失败，直接return
+  try 运行callable，如果成功，把结果保存起来，state变成completing
+}

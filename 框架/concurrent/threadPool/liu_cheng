@@ -1,0 +1,74 @@
+Future<V>接口
+boolean cancel(boolean 如果正在进行是否打断) 返回取消是否成功，一般已经完成会返回false
+boolean isCanceled() 在完成之前是否已经取消
+isDone() 返回true表示已完成，跑异常，被取消
+V get() InterruptedException, ExecutionException,CancellationException
+V get(long timeout, TimeUnit unit)
+        throws InterruptedException, ExecutionException, TimeoutException;
+
+RunnableFuture<V> 接口，结合Runnable,Future
+
+FutureTask implement RunnableFuture
+
+
+ThreadPool
+32位int表示状态，高3位表示状态，低29位表示线程数量
+状态-1： running
+     0: shutdown
+     1: stop
+     2: tidying
+     3: terminated
+
+private final class Worker
+        extends AbstractQueuedSynchronizer
+        implements Runnable
+  成员：thread
+        volatile long completedTasks;
+  
+        Worker(runnable) {
+          setState(-1);
+          firstTask = runnable;           
+          thread = getThreadFactory.newThread(this/*Worker*/);
+        }
+
+
+void execute(Runnable) {
+   if workerCount < coreSize, then addCoreWorker(runnable)
+   
+}
+
+addWorker返回boolean, false表示添加失败，可能是已经关闭或者已达到最大
+正常会构造Worker，然后获取threadpool的reentrantLock，再检查是否在运行，将worker添加到hashset里，启动线程，最后unlock
+默认的threadFactory就是 new Thread(runnable)，所以一启动就会执行runnable
+
+回到execute，如果已经达到coreSize或者addWorker失败,那就尝试添加到workQueue里，添加失败就增加worker，增加失败调用RejectedExecutionHandler的方法
+
+Worker的run方法：
+添加成功就会启动线程，调用run方法
+线程启动后，如果有firstTask，先执行firstTask，然后循环，调用getTask，
+然后获取worker的锁（worker继承aqs），执行task，释放锁
+getTask:
+如果当前状态处于stop，表示不能再执行，这时减小workerCount并返回null
+如果处于shutdown，还要看workqueue还有没有，有的话继续取runnable; 没有也是返回null
+然后就要从workqueue里面取了，有2种取法，poll超时或take。如果workcount大于coreSize，使用poll，否则使用take。
+超时返回null，这样thread就会结束了
+
+现在来看执行task出现异常，
+异常会直接抛出，并不会print。想print可以重写afterExecute方法，
+异常会导致线程结束，如果状态为running或shutdown，那需要重新添加线程
+
+
+shutdown
+把状态调整到shutdown
+遍历worker，打断interrupt，前提是获取worker的锁。前面我们提到，worker执行task的时候会加锁，就是说执行task的时候，不能打断。
+如果有worker正在等，那会被打断，再去判断状态
+
+tryTerminate:
+如果处于shutdown，并且workqueue不为空，返回
+如果workqueue为空，workercount不为0, 打断，返回
+如果workercount为0了，状态变为tidying，然后调用terminated，然后变为terminated，最后condition.signalAll，通知所有等待terminate的线程
+
+worker退出的时候也会调用tryterminate，这样可以防止worker一直阻塞在queue
+
+
+shutdownnow也是差不多，状态变为stop，然后返回未执行的task

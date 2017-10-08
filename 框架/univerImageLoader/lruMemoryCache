@@ -1,0 +1,6 @@
+成员 linkHashMap
+int maxSize    int size
+
+get: 加锁 直接从hashmap get
+put：加锁 计算插入的大小，增加大小，插入，如果有旧的，减去旧的大小。trimToSize
+trimToSize: 循环，直到size小于maxSize，加锁，从hashmap删除，减去size。

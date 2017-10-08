@@ -1,0 +1,30 @@
+看RecyclerView的smoothScrollToPosition
+里面就是调用了layoutManager的同名方法，我们看LinearManager
+linearManager就是构造了LinearSmoothScroller，设置了targetPosition，然后作为参数调用startSmoothScroll方法
+这个方法会先停止当前的smoothScroller，然后再调用新smoothScroller的start方法
+start方法：
+设置变量    mRecyclerView.mState.mTargetPosition = mTargetPosition;
+            mRunning = true;
+            mPendingInitialRun = true;
+然后mTargetView = findViewByPosition(getTargetPosition());
+最后调用postOnAnimation
+
+先来讲讲smoothScroller
+重点是onAnimation(int dx, int dy)这个方法
+首先是状态判断
+然后出现了mTargetView，顾名思义，就是要scrollTo的那个view
+这个mTargetView在smoothScroller的start方法里被赋值过一次，可能为null
+还有在layoutManager的addViewInt里，当添加view的时候，就会调用smoothScroller的onViewAttach方法，这个方法里就会判断这个view的position是不是等于mTargetPosition，如果是那就保存到mTargetView
+所以，如果这个mTargetView不为Null，那意味这targetView已经被add到RecyclerView了
+然后调用onTargetFound，这里又出现了mRecyclingAction，这个又是干嘛的？
+
+因为smoothScroller要控制滑动的距离和时间，所以RecyclerView提供了一个Action类，mRecyclingAction就是类的对象
+可以看到，Action类的update方法，传入滑动距离，时间，插值器，有了这些配置，ViewFling的scroller就可以根据配置进行滑动了
+所以这个Action提供了控制滑动的入口
+
+回到onAnimation
+当找到targetView的时候，其实smoothScroller的任务已经完成，running标置位会置false
+那如果没找到，调用onSeekTargetStep
+
+onSeekTargetStep和onTargetFound由子类重写，所以我们看LinearSmoothScroller
+

@@ -1,0 +1,32 @@
+首先看setAdapter:
+mAdapter.setViewPagerObserver
+注册的是一个内部类，回调都是调用dataSetChanged
+
+在onMeasure，可以看出，如果是wrap_content，那会取最大值
+
+成员mItems是一个List，装ItemInfo
+mCurItem指向当前itemInfo的position
+static class ItemInfo {
+        Object object;
+        int position;
+        boolean scrolling;
+        float widthFactor;
+        float offset;
+    }
+
+
+populate(int newCurrentItem)
+首先找出oldItemInfo，就是从items中找出position == mCurItem的
+然后mCurItem = newCurrentItem
+
+调用adapter的startUpdate
+
+找出newCurrentPosition指向的itemInfo，如果没有，构造一个ItemInfo, position = newCurrentPosition，object = mAdapter.instantiateItem(this, position)
+widthFactor = mAdapter.getPageWidth(position);
+然后添加到items中
+
+final int clientWidth = getClientWidth();
+final float leftWidthNeeded = 
+     2.f - curItem.widthFactor + (float) getPaddingLeft() / (float) clientWidth;
+clientWidth就是measureWidth - paddingleft - paddingright
+

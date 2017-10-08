@@ -1,0 +1,96 @@
+RecyclerView.scrollToPosition:
+先stopScroll，设置state为idle，mViewFlinger.stop()//停止滑翔
+mSmoothScroller.stop()//layoutManger停止smoothScroll
+
+然后调用layoutMnager的scrollToPosition，以Linear为例
+进行赋值 mPendingScrollPosition = position;
+ mPendingScrollPositionOffset = INVALID_OFFSET;
+然后requestLayout
+
+现在看onLayoutChildren
+首先确定锚点，进入updateAnchorInfoForLayout(RecyclerView.Recycler recycler, RecyclerView.State state,AnchorInfo anchorInfo)
+看第一个分支：updateAnchorFromPendingData //返回true表示anchor已确定，否则false
+1 如果是prelayout或者mPendingScrollPosition == NO_POSITION，返回false
+2 如果mPendingScrollPosition小于0或者大于ItemCount,返回false
+3 来到这里，表明要根据scrollToPosition来布局子view，这个方法会返回true。  
+  anchorInfo.mPosition = mPendingScrollPosition;
+4 然后要看scrollTo这个子view存不存在，
+  不存在：如果scrollPosition < child(0).position, anchorInfo.mLayoutFromEnd = false;
+          反之，anchorInfo.mLayoutFromEnd = true
+          然后设置anchor的mCoordinate，这个mCoordinate是放的第一个view的top或者bottom(包括margin和insets)。根据mLayoutFromEnd来确定是paddingtop还是bottom
+   
+   存在：计算目标子view的top和bottom(包括margin和insets)，来判断子view是否已经完全显示，若未完全显示，其实也是按照不存在的情况去布局; 如果已经完全显示，那mCoordinate就根据mLayoutFromEnd来取目标子view的总top或总bottom
+
+LinearLayoutManger还提供了一个scrollToPositionWithOffset(position, offset)方法
+如果调用了这个，mPendingScrollPositionOffset = offset，mCoordinate会考虑offset。
+注意，offset有相对于顶部和底部两种情况，取决于mShouldReverseLayout变量，可通过setReverseLayout(boolean reverseLayout)设置
+
+总结一下，第一个分支处理scrollToPosition，根据目标子view是否存在以及是否完全显示确定anchor
+
+
+第二个分支 updateAnchorFromChildren
+如果没有子view，返回false，表示无法确定anchor
+根据mLayoutFromEnd，从顶开始或从低开始找子view，找的时候会遇到3中子view，
+   1：已经被标记remove的  2：看不见的，位于RecyclerView可见范围之外  3：前2項都不满足，最好的子view
+   优先是最好的子view，找不到的话就取看不见的，实在不行就被remove的
+   根据找到的子view就可以确定coordinate和position了，如果找到的子view是看不见的，那coordinate应该从顶部或底部开始(根据mLayoutFromEnd)
+
+最后一个分支，来到这里意味着前面的2个分支都无法确定anchor。
+那就从0开始布局吧
+
+
+anchor确定好了，跳过中间那些extra，来到熟悉的detachAndScrapAttachedViews
+首先调用updateLayoutStateToFillEnd
+2个参数int itemPosition/*anchor.mPosition*/, int offset/*anchor.mCoordinate*/
+mLayoutState.mAvailable = mOrientationHelper.getEndAfterPadding() - offset;表示有多少空余空间
+mLayoutState.mCurrentPosition = itemPosition;
+mLayoutState.mItemDirection正常情况下为1, 
+mLayoutState.mLayoutDirection = LayoutState.LAYOUT_END;
+    mLayoutState.mOffset = offset;
+    mLayoutState.mScrollingOffset = LayoutState.SCROLLING_OFFSET_NaN;
+这个方法就是在赋值
+
+update完了，开始填充view，进入fill方法
+首先final int start = layoutState.mAvailable; 这个start记录初始available，最后有用
+然后进入while循环，循环条件是remainingSpace大于0 并且 还有下一个data
+循环里面调用layoutChunk，这个方法真正对子view进行measure,layout。
+逻辑比较简单，注意layoutState有成员mCurrentPosition，调用next的时候这个变量会加1，所以这个变量表示下一个要布局的view的position
+注意最后一段 if (params.isItemRemoved() || params.isItemChanged()) {
+      result.mIgnoreConsumed = true;
+    }
+如果拿到的这个子view是remove的，(在prelayout时，可以拿到)，result的ignoreConsumed为true
+
+layoutChunk出来，下面就有一个判断，如果是ignoreConsumed，那mAvailable和remainingSpace都不会减去consumed
+就是说，在preLayout，如果有view被remove了，会布局更多的view，以完成动画
+
+fill的最后 return start - layoutState.mAvailable; 返回消耗了多少
+
+下面就是向start方向填充，过程类似的。
+
+
+最后一步 layoutForPredictiveAnimations
+这个方法考虑的是，如果添加了view，那可能会有原来的view滑出RecyclerView，为了动画效果，为了获得layout之后的位置，这些view也要重新attach到RecyclerView上
+这个方法在prelayout不起作用，在正式layout才有用
+
+为了方便分析，假设添加view会使下面的view往下滑
+
+前面讲过，layoutManager开始布局之前会把所有view detach，放进mAttachedScrap这个List里
+当添加了数据，插入了view，那可能导致滑出了RecyclerView的view留在mAttachedScrap里，
+所以要把这些view遍历，除去被remove的，累加它们的高度，保存在int scrapExtra里
+然后mLayoutState.mScrapList = scrapList;
+
+又看到updateLayoutStateToFillEnd了，这次的position是当前最底下的view的position，offset就是那个view的总bottom
+mLayoutState.mExtra = scrapExtraEnd; 这个mExtra会组成fill方法里的remainingSpace
+mLayoutState.assignPositionFromScrapList(); 这个方法会找出layoutPosition最接近currentPosition的view的position，保证顺序
+接下来会调用fill，fill里会通过layoutState的next方法获取下一个布局的view
+
+现在我们进入layoutState的next方法看看
+正常情况下，从Recycler中获取
+但现在我们有scrapList，所以从scrapList中取
+前面我们设置了layoutState的currentPosition为scrapList中最接近底部view的position，所以遍历scrapList，找到position等于currentPosition的view，最后找下一个，返回view
+总的来说就是按position递增的顺序从scrapList中取view，这样就能保证顺序
+
+从next中取到了view，这时并不是addView，而是attach
+layoutForPredictiveAnimations完成
+
+layoutChildren基本流程就是这样
